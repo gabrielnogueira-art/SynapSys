@@ -7,6 +7,7 @@ import { ModuleId, PlatformContract } from "@/platform/types";
 import { buildAntigravityEditPrompt, getModuleById, SEGMENT_DEFINITIONS } from "@/platform/catalog";
 import { useToast } from "@/hooks/use-toast";
 import { switchToClientSimulation, useViewerSession } from "@/platform/session";
+import { useUserRole } from "@/hooks/useUserRole";
 
 interface ContractBannerProps {
   contract: PlatformContract;
@@ -25,12 +26,13 @@ export const ContractBanner = ({
   onSelectModule,
 }: ContractBannerProps) => {
   const session = useViewerSession();
+  const role = useUserRole();
   const { toast } = useToast();
   const [collapsed, setCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Nunca exibir para usuários finais de contrato
-  if (session.mode !== "owner") {
+  if (session.mode !== "owner" || role.role !== "master") {
     return null;
   }
 

@@ -282,7 +282,7 @@ export const PlatformUsersTab = ({
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          {u.accessLevel !== "dono_plataforma" && u.status === "ativo" && (
+                          {isMaster && u.accessLevel !== "dono_plataforma" && u.status === "ativo" && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -300,6 +300,7 @@ export const PlatformUsersTab = ({
                             size="icon"
                             variant="ghost"
                             title={u.status === "bloqueado" ? "Reativar" : "Bloquear"}
+                            disabled={!isMaster && u.accessLevel === "gestor_contrato"}
                             onClick={() =>
                               run(() => onUpdateStatus(
                                 u.id,
@@ -313,7 +314,7 @@ export const PlatformUsersTab = ({
                               <Ban className="h-4 w-4 text-amber-600" />
                             )}
                           </Button>
-                          {u.accessLevel !== "dono_plataforma" && (
+                          {u.accessLevel !== "dono_plataforma" && (isMaster || u.accessLevel !== "gestor_contrato") && (
                             <Button
                               size="icon"
                               variant="ghost"
