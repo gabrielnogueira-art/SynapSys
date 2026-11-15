@@ -61,6 +61,11 @@ export interface PlatformContract {
   isReferenceExample?: boolean;
   notes?: string;
   createdAt: string;
+  branding?: {
+    logoUrl?: string | null;
+    primaryHsl?: string | null;
+    presidentPastor?: string | null;
+  };
 }
 
 export type UserAccessLevel =
