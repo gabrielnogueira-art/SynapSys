@@ -141,7 +141,9 @@ export function usePlatformStore() {
     };
     check(await db.from("platform_contracts").insert({ id, code, data }));
     await done();
-    return getContractById(id)!;
+    const created = getContractById(id);
+    if (!created) throw new Error("Contrato salvo; recarregue a lista para consultá-lo");
+    return created;
   };
 
   const updateContract = async (contractId: string, patch: Partial<PlatformContract>) => {
@@ -207,6 +209,10 @@ export function usePlatformStore() {
 
   return {
     ...state, addContract, updateContract, deleteContract, addUser, updateUserStatus, deleteUser,
+    updateBranding: async (contractId: string, branding: PlatformContract["branding"]) => {
+      await callUsers({ action: "branding", contractId, branding });
+      await done();
+    },
     addChangeRequest, updateChangeRequestStatus, deleteChangeRequest, importLegacyBrowserData, reload: reloadPlatformStore,
     toggleContractModule: async (contractId: string, moduleId: ModuleId) => {
       const c = getContractById(contractId);

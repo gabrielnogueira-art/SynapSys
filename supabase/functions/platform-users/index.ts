@@ -16,6 +16,11 @@ const Body = z.discriminatedUnion("action", [
   }),
   z.object({ action: z.literal("status"), membership_id: z.string().uuid(), status: z.enum(["ativo", "bloqueado"]) }),
   z.object({ action: z.literal("remove"), membership_id: z.string().uuid() }),
+  z.object({ action: z.literal("branding"), contractId: z.string(), branding: z.object({
+    logoUrl: z.string().url().startsWith("https://").nullable(),
+    primaryHsl: z.string().regex(/^\d+(?:\.\d+)?\s+\d+(?:\.\d+)?%\s+\d+(?:\.\d+)?%$/).nullable(),
+    presidentPastor: z.string().trim().max(160).nullable(),
+  }) }),
 ]);
 
 Deno.serve(async (req) => {
@@ -40,7 +45,7 @@ Deno.serve(async (req) => {
 
     let contractId: string;
     let target: { id: string; user_id: string; access_level: string } | null = null;
-    if (body.action === "create") contractId = body.contractId;
+    if (body.action === "create" || body.action === "branding") contractId = body.contractId;
     else {
       const { data } = await admin.from("platform_memberships").select("id,user_id,contract_id,access_level").eq("id", body.membership_id).maybeSingle();
       if (!data) return json({ error: "Vínculo não encontrado" }, 404);
@@ -58,6 +63,11 @@ Deno.serve(async (req) => {
       if (target?.user_id === caller) return json({ error: "Você não pode alterar o próprio acesso" }, 403);
     }
 
+    if (body.action === "branding") {
+      const { error } = await admin.from("platform_contracts").update({ data: { ...contract.data, branding: body.branding } }).eq("id", contractId);
+      if (error) throw error;
+      return json({ ok: true });
+    }
     if (body.action === "create") {
       const { data: created, error } = await admin.auth.admin.createUser({
         email: body.email, password: body.password, email_confirm: true, user_metadata: { display_name: body.name },
@@ -71,12 +81,13 @@ Deno.serve(async (req) => {
       if (me) { await admin.auth.admin.deleteUser(created.user.id); return json({ error: "Não foi possível vincular o usuário" }, 400); }
       return json({ ok: true });
     }
+    if (!target) return json({ error: "Vínculo não encontrado" }, 404);
     if (body.action === "status") {
-      const { error } = await admin.from("platform_memberships").update({ status: body.status }).eq("id", target!.id);
+      const { error } = await admin.from("platform_memberships").update({ status: body.status }).eq("id", target.id);
       if (error) throw error;
       return json({ ok: true });
     }
-    const { error } = await admin.from("platform_memberships").delete().eq("id", target!.id);
+    const { error } = await admin.from("platform_memberships").delete().eq("id", target.id);
     if (error) throw error;
     return json({ ok: true });
   } catch (e) {

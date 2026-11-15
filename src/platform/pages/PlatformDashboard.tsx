@@ -32,7 +32,8 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import { usePlatformStore } from "@/platform/store";
+import { useUserRole } from "@/hooks/useUserRole";
+import { hasLegacyPlatformData, usePlatformStore } from "@/platform/store";
 import {
   buildAntigravityEditPrompt,
   getModuleById,
@@ -63,6 +64,7 @@ export const PlatformDashboard = () => {
   const { toast } = useToast();
   const store = usePlatformStore();
   const session = useViewerSession();
+  const role = useUserRole();
 
   const [activeTab, setActiveTab] = useState("contracts");
   const [search, setSearch] = useState("");
@@ -133,6 +135,10 @@ export const PlatformDashboard = () => {
     setActiveTab("requests");
   };
 
+  if (role.loading || store.loading) return <div className="p-8 text-muted-foreground">Carregando plataforma…</div>;
+  if (role.role !== "master") return <Navigate to="/login?next=/plataforma" replace />;
+  if (store.error) return <div className="p-8 space-y-4"><p role="alert">{store.error}</p><Button onClick={() => store.reload()}>Tentar novamente</Button></div>;
+
   if (session.mode === "client") {
     return <Navigate to={`/c/${session.contractId}`} replace />;
   }
@@ -167,23 +173,12 @@ export const PlatformDashboard = () => {
                 <LogIn className="h-4 w-4 mr-1.5" /> Login Direto (EBD)
               </Button>
             </Link>
-            <Button
-              size="sm"
-              variant="ghost"
-              title="Restaurar dados iniciais de demonstração"
-              onClick={() => {
-                if (
-                  confirm(
-                    "Restaurar os contratos, usuários e solicitações padrão da plataforma?"
-                  )
-                ) {
-                  store.resetToDefaults();
-                  toast({ title: "Plataforma restaurada para o padrão inicial" });
-                }
-              }}
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
+            {hasLegacyPlatformData() && <Button size="sm" variant="outline" onClick={async () => {
+              try {
+                const count = await store.importLegacyBrowserData();
+                toast({ title: `${count} contrato(s) importado(s)`, description: "Contas antigas de demonstração não foram transformadas em logins." });
+              } catch (e: any) { toast({ variant: "destructive", title: "Falha ao importar", description: e.message }); }
+            }}>Importar dados deste navegador</Button>}
             <Button size="sm" onClick={() => setNewContractOpen(true)}>
               <Plus className="h-4 w-4 mr-1.5" /> Novo Contrato
             </Button>
@@ -353,13 +348,13 @@ export const PlatformDashboard = () => {
                             variant="ghost"
                             className="h-7 w-7"
                             title="Remover contrato"
-                            onClick={() => {
+                            onClick={async () => {
                               if (
                                 confirm(
                                   `Remover o contrato ${contract.code} (${contract.clientName})?`
                                 )
                               ) {
-                                store.deleteContract(contract.id);
+                                try { await store.deleteContract(contract.id); } catch (e: any) { toast({ variant: "destructive", title: "Não foi possível excluir", description: e.message }); }
                               }
                             }}
                           >
@@ -529,8 +524,8 @@ export const PlatformDashboard = () => {
         open={newContractOpen}
         onOpenChange={setNewContractOpen}
         nextCodePreview={nextCodePreview}
-        onCreate={(input) => {
-          const created = store.addContract(input);
+        onCreate={async (input) => {
+          const created = await store.addContract(input);
           toast({
             title: `Contrato ${created.code} criado!`,
             description: `Pasta reservada: GitHub/${created.codeFolder}/`,
@@ -542,8 +537,8 @@ export const PlatformDashboard = () => {
       <ContractModulesDialog
         contract={editingContract}
         onClose={() => setEditingContract(null)}
-        onSave={(id, patch) => {
-          store.updateContract(id, patch);
+        onSave={async (id, patch) => {
+          await store.updateContract(id, patch);
           toast({ title: "Contrato atualizado com sucesso" });
         }}
       />
