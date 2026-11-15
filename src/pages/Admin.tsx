@@ -21,10 +21,12 @@ import { BrandingTab } from "@/components/BrandingTab";
 import { BrandingHeader } from "@/components/BrandingHeader";
 import { ScopeProvider } from "@/context/ScopeContext";
 import { ScopeGate } from "@/components/ScopeGate";
+import { useContractBasePath } from "@/platform/useContractBasePath";
 
 const Admin = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { resolve, contractId } = useContractBasePath();
   const [isLoading, setIsLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -52,7 +54,7 @@ const Admin = () => {
       } else if (!hasSession && resolved) {
         // só redireciona depois que getSession resolveu e confirmou que não há sessão
         setIsLoading(false);
-        navigate("/login");
+        navigate(resolve("/login"));
       }
     };
     // Listener primeiro para capturar SIGNED_IN/TOKEN_REFRESHED.
@@ -71,13 +73,13 @@ const Admin = () => {
 
   useEffect(() => {
     if (!userRole.loading && userRole.role === "professor_classe") {
-      navigate("/professor");
+      navigate(resolve("/professor"));
     }
   }, [userRole.loading, userRole.role, navigate]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    navigate("/");
+    navigate(resolve("/"));
   };
 
   const handleRefresh = () => {
@@ -109,6 +111,11 @@ const Admin = () => {
             <p className="text-muted-foreground">Gerencie registros, alunos e relatórios</p>
           </div>
           <div className="flex gap-2">
+            {!contractId && isMaster && (
+              <Button onClick={() => navigate("/")} variant="secondary">
+                Plataforma
+              </Button>
+            )}
             <Button onClick={handleRefresh} variant="outline" size="icon">
               <RefreshCw className="h-4 w-4" />
             </Button>

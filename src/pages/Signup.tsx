@@ -6,10 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { UserPlus, ArrowLeft } from "lucide-react";
+import { useContractBasePath } from "@/platform/useContractBasePath";
 
 const Signup = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { resolve } = useContractBasePath();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,7 +44,7 @@ const Signup = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-secondary/10 via-background to-blue-500/10 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <Button variant="ghost" onClick={() => navigate("/login")} className="absolute top-4 left-4 flex items-center gap-2 text-muted-foreground">
+        <Button variant="ghost" onClick={() => navigate(resolve("/login"))} className="flex items-center gap-2 text-muted-foreground mb-4">
           <ArrowLeft className="h-4 w-4" /> Voltar
         </Button>
         <Card className="shadow-2xl border-primary/20">
@@ -55,7 +57,7 @@ const Signup = () => {
             {submitted ? (
               <div className="text-center space-y-4">
                 <p className="text-sm">Cadastro recebido! Aguarde a aprovação de um administrador.</p>
-                <Button onClick={() => navigate("/login")} className="w-full">Voltar ao login</Button>
+                <Button onClick={() => navigate(resolve("/login"))} className="w-full">Voltar ao login</Button>
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -66,7 +68,7 @@ const Signup = () => {
                   {loading ? "Enviando..." : "Solicitar acesso"}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
-                  Já tem conta? <Link to="/login" className="text-primary underline">Entrar</Link>
+                  Já tem conta? <Link to={resolve("/login")} className="text-primary underline">Entrar</Link>
                 </p>
               </form>
             )}

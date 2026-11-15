@@ -1,63 +1,19 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { EBDRegistrationForm } from "./components/EBDRegistrationForm";
+import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
-import ChoirView from "./pages/Choir"; // <-- 1. IMPORTAR A NOVA PÁGINA
+import ChoirView from "./pages/Choir";
 import Professor from "./pages/Professor";
 import Signup from "./pages/Signup";
 import OAuthConsent from "./pages/OAuthConsent";
 import { BrandingApplier } from "./components/BrandingApplier";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
-
-function RootGate() {
-  const [state, setState] = useState<"loading" | "anon" | { to: string }>("loading");
-  useEffect(() => {
-    let active = true;
-    const resolve = async (session: any) => {
-      if (!active) return;
-      if (!session) { setState("anon"); return; }
-      try {
-        const { data: roles } = await supabase
-          .from("user_roles" as any)
-          .select("role")
-          .eq("user_id", session.user.id);
-        const list = ((roles as unknown) as Array<{ role: string }>) || [];
-        const has = (r: string) => list.some((x) => x.role === r);
-        let to = "/admin";
-        if (has("master")) to = "/admin?scope=master";
-        else if (has("igreja_mae")) to = "/admin?scope=ministry";
-        else if (has("igreja_sede")) to = "/admin?scope=headquarters";
-        else if (has("admin_regional")) to = "/admin?scope=regional";
-        else if (has("secretario_ebd")) to = "/admin?scope=congregation";
-        else if (has("professor_classe")) to = "/professor";
-        if (active) setState({ to });
-      } catch {
-        if (active) setState({ to: "/admin" });
-      }
-    };
-    supabase.auth.getSession().then(({ data }) => resolve(data.session)).catch(() => resolve(null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      // Defer async work: chamadas Supabase dentro do callback podem travar o auth client.
-      setTimeout(() => resolve(session), 0);
-    });
-    // Failsafe: evita loading infinito caso o proxy do preview trave
-    const t = setTimeout(() => { if (active) setState("anon"); }, 4000);
-    return () => { active = false; clearTimeout(t); sub.subscription.unsubscribe(); };
-  }, []);
-  if (state === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
-      </div>
-    );
-  }
-  if (state === "anon") return <Navigate to="/login" replace />;
-  return <Navigate to={state.to} replace />;
-}
+import { PlatformDashboard } from "@/platform/pages/PlatformDashboard";
+import { ContractRouter } from "@/platform/components/ContractRouter";
+import { SimulationFloatingPill } from "@/platform/components/SimulationFloatingPill";
 
 function App() {
   return (
@@ -65,14 +21,18 @@ function App() {
       <BrandingApplier />
       <Toaster />
       <SonnerToaster />
+      <SimulationFloatingPill />
       <Routes>
-        <Route path="/" element={<RootGate />} />
+        <Route path="/" element={<PlatformDashboard />} />
+        <Route path="/plataforma" element={<PlatformDashboard />} />
+        <Route path="/c/:contractId/*" element={<ContractRouter />} />
+        <Route path="/ebd" element={<Index />} />
         <Route path="/form" element={<EBDRegistrationForm />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/professor" element={<Professor />} />
-        <Route path="/coristas" element={<ChoirView />} /> {/* <-- 2. ADICIONAR A NOVA ROTA */}
+        <Route path="/coristas" element={<ChoirView />} />
         <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

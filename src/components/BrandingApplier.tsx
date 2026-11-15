@@ -1,16 +1,29 @@
 import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useBranding } from "@/hooks/useBranding";
+import { getContractById } from "@/platform/store";
 
 /**
  * Aplica o tema do ministerio no <html>: sobrescreve --primary, --primary-glow
- * e --gradient-primary com a cor cadastrada. Sem cor cadastrada, mantem o tema padrao.
+ * e --gradient-primary com a cor cadastrada.
+ * Mantém o tema neutro na Plataforma Central e em contratos do segmento Comércio.
  */
 export const BrandingApplier = () => {
   const { ministry } = useBranding();
+  const { pathname } = useLocation();
 
   useEffect(() => {
     const root = document.documentElement;
-    const hsl = ministry?.brand_primary_hsl?.trim();
+    const isPlatformRoute = pathname === "/" || pathname.startsWith("/plataforma");
+    const contractMatch = pathname.match(/^\/c\/([^/]+)/);
+    const activeContract = contractMatch ? getContractById(contractMatch[1]) : undefined;
+    const isNonChurchContract = activeContract && activeContract.segment !== "igreja";
+
+    const hsl =
+      isPlatformRoute || isNonChurchContract
+        ? undefined
+        : ministry?.brand_primary_hsl?.trim();
+
     if (!hsl) {
       root.style.removeProperty("--primary");
       root.style.removeProperty("--primary-glow");
@@ -32,7 +45,7 @@ export const BrandingApplier = () => {
       "--gradient-primary",
       `linear-gradient(135deg, hsl(${h} ${s}% ${l}%), hsl(${h} ${Math.min(100, s + 5)}% ${glowL}%))`,
     );
-  }, [ministry?.brand_primary_hsl]);
+  }, [ministry?.brand_primary_hsl, pathname]);
 
   return null;
 };

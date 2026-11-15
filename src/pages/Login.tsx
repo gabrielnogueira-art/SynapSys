@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { UserCog, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useContractBasePath } from "@/platform/useContractBasePath";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -15,6 +16,7 @@ const Login = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const { resolve } = useContractBasePath();
 
   // Same-origin relative paths only, to avoid open-redirect abuse.
   const rawNext = searchParams.get("next");
@@ -33,13 +35,13 @@ const Login = () => {
     const roleList = ((roles as unknown) as Array<{ role: string }>) || [];
     const has = (r: string) => roleList.some((x) => x.role === r);
 
-    if (has("master")) navigate("/admin?scope=master");
-    else if (has("igreja_mae")) navigate("/admin?scope=ministry");
-    else if (has("igreja_sede")) navigate("/admin?scope=headquarters");
-    else if (has("admin_regional")) navigate("/admin?scope=regional");
-    else if (has("secretario_ebd")) navigate("/admin?scope=congregation");
-    else if (has("professor_classe")) navigate("/professor");
-    else navigate("/admin");
+    if (has("master")) navigate(resolve("/admin?scope=master"));
+    else if (has("igreja_mae")) navigate(resolve("/admin?scope=ministry"));
+    else if (has("igreja_sede")) navigate(resolve("/admin?scope=headquarters"));
+    else if (has("admin_regional")) navigate(resolve("/admin?scope=regional"));
+    else if (has("secretario_ebd")) navigate(resolve("/admin?scope=congregation"));
+    else if (has("professor_classe")) navigate(resolve("/professor"));
+    else navigate(resolve("/admin"));
   };
 
   useEffect(() => {
@@ -116,8 +118,8 @@ const Login = () => {
       <div className="w-full max-w-md">
         <Button 
           variant="ghost" 
-          onClick={() => navigate('/')}
-          className="absolute top-4 left-4 flex items-center gap-2 text-muted-foreground"
+          onClick={() => navigate(resolve('/'))}
+          className="flex items-center gap-2 text-muted-foreground mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Voltar à Página Inicial
@@ -161,7 +163,7 @@ const Login = () => {
             </form>
             <p className="text-center text-xs text-muted-foreground mt-4">
               Não tem conta?{" "}
-              <Link to="/signup" className="text-primary underline">Solicitar acesso</Link>
+              <Link to={resolve("/signup")} className="text-primary underline">Solicitar acesso</Link>
             </p>
           </CardContent>
         </Card>

@@ -13,6 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Lock, X, Eye, Trash2 } from "lucide-react";
+import { useContractBasePath } from "@/platform/useContractBasePath";
 
 interface Class {
   id: number;
@@ -40,6 +41,7 @@ interface FormData {
 
 export const EBDRegistrationForm = () => {
   const navigate = useNavigate();
+  const { resolve } = useContractBasePath();
   const [classes, setClasses] = useState<Class[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>('');
@@ -444,7 +446,7 @@ export const EBDRegistrationForm = () => {
     }
   };
 
-  const handleBackToLogin = () => navigate("/");
+  const handleBackToLogin = () => navigate(resolve("/"));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-2 sm:p-4">

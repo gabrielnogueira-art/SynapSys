@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { Music4, Printer } from "lucide-react";
+import { useContractBasePath } from "@/platform/useContractBasePath";
 
 interface Hymn {
   hymn: string;
@@ -15,6 +16,7 @@ const ChoirView = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { resolve } = useContractBasePath();
 
   const handlePrint = () => {
     window.print();
@@ -76,7 +78,7 @@ const ChoirView = () => {
         <Card className="shadow-lg">
           <CardHeader className="text-center">
             <div className="flex items-center justify-between">
-              <Button onClick={() => navigate("/")} variant="outline" size="sm" className="print:hidden">
+              <Button onClick={() => navigate(resolve("/"))} variant="outline" size="sm" className="print:hidden">
                 ← Voltar
               </Button>
               <div className="flex-1">

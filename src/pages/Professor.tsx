@@ -11,9 +11,11 @@ import { ProfessorStudentsTab } from "@/components/ProfessorStudentsTab";
 import { ProfessorDashboardTab } from "@/components/ProfessorDashboardTab";
 import { ProfessorSidebar, ProfessorSection } from "@/components/ProfessorSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { useContractBasePath } from "@/platform/useContractBasePath";
 
 const Professor = () => {
   const navigate = useNavigate();
+  const { resolve } = useContractBasePath();
   const { role, loading } = useUserRole();
   const [checking, setChecking] = useState(true);
   const [classId, setClassId] = useState<number | null>(null);
@@ -24,7 +26,7 @@ const Professor = () => {
     const check = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        navigate("/login");
+        navigate(resolve("/login"));
         return;
       }
       const { data: classesData, error } = await supabase
@@ -42,13 +44,13 @@ const Professor = () => {
 
   useEffect(() => {
     if (!loading && role === "secretario_ebd") {
-      navigate("/admin");
+      navigate(resolve("/admin"));
     }
   }, [loading, role, navigate]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    navigate("/");
+    navigate(resolve("/"));
   };
 
   if (checking || loading) {
