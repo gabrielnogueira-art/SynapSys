@@ -139,7 +139,7 @@ export function usePlatformStore() {
       responsibleEmail: input.responsibleEmail?.trim() || undefined, planName: input.planName?.trim() || undefined,
       monthlyValue: input.monthlyValue, notes: input.notes?.trim() || undefined, branding: {},
     };
-    check(await db.from("platform_contracts").insert({ id, code, data }));
+    check(await db.rpc("create_platform_contract", { _id: id, _code: code, _data: data }));
     await done();
     const created = getContractById(id);
     if (!created) throw new Error("Contrato salvo; recarregue a lista para consultá-lo");

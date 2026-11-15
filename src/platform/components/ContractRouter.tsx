@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
 import { usePlatformStore } from "@/platform/store";
-import { CONTRACT_COMPONENTS } from "@/contracts/registry";
 import { GenericContractEntry } from "@/contracts/GenericContractEntry";
 import { ContractBanner } from "@/platform/components/ContractBanner";
 import { EBDRegistrationForm } from "@/components/EBDRegistrationForm";
@@ -90,9 +89,7 @@ export const ContractRouter = () => {
               <ShieldAlert className="h-5 w-5" /> Acesso Restrito
             </CardTitle>
             <CardDescription>
-              Seu usuário tem permissão exclusiva para o contrato{" "}
-              <strong>{ownContract ? `${ownContract.code} (${ownContract.clientName})` : "vinculado"}</strong>.
-              Não é permitido acessar dados de outros contratos ({contract.code}).
+              O contrato {contract.code} está suspenso. Entre em contato com o responsável pela plataforma.
             </CardDescription>
           </CardHeader>
           <CardContent>

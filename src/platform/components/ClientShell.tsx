@@ -30,6 +30,8 @@ import {
 import { ModuleId, PlatformContract } from "@/platform/types";
 import { getModuleById } from "@/platform/catalog";
 import { useContractAccess } from "@/platform/useContractAccess";
+import { useUserRole } from "@/hooks/useUserRole";
+import { supabase } from "@/integrations/supabase/client";
 import { switchToOwnerMode, useViewerSession } from "@/platform/session";
 
 export interface ShellSidebarItem {
@@ -75,6 +77,7 @@ export const ClientShell = ({
   const navigate = useNavigate();
   const session = useViewerSession();
   const access = useContractAccess(contract.id);
+  const role = useUserRole();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -344,7 +347,7 @@ export const ClientShell = ({
                   >
                     <Home className="h-3.5 w-3.5 mr-2" /> Ir ao Painel Geral
                   </Button>
-                  {session.mode === "client" && (
+                  {session.mode === "client" && role.role === "master" && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -357,6 +360,9 @@ export const ClientShell = ({
                       <LogOut className="h-3.5 w-3.5 mr-2" /> Encerrar sessão do cliente
                     </Button>
                   )}
+                  <Button size="sm" variant="outline" onClick={async () => { await supabase.auth.signOut(); switchToOwnerMode(); navigate(`${contract.entryPath}/login`); }}>
+                    <LogOut className="h-3.5 w-3.5 mr-2" /> Sair
+                  </Button>
                 </div>
               </PopoverContent>
             </Popover>

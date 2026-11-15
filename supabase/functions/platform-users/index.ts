@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
+import { canManageMembership } from "./permissions.ts";
 import { z } from "npm:zod@3.25.76";
 
 const cors = {
@@ -52,13 +53,14 @@ Deno.serve(async (req) => {
       target = data; contractId = data.contract_id;
     }
 
-    const { data: contract } = await admin.from("platform_contracts").select("id,data").eq("id", contractId).maybeSingle();
+    const { data: contract } = await admin.from("platform_contracts").select("id,data,ministry_id").eq("id", contractId).maybeSingle();
     if (!contract) return json({ error: "Contrato não encontrado" }, 404);
     if (!isMaster) {
       if (contract.data?.status === "suspenso") return json({ error: "Contrato suspenso" }, 403);
       const { data: own } = await admin.from("platform_memberships").select("id").eq("user_id", caller).eq("contract_id", contractId).eq("status", "ativo").eq("access_level", "gestor_contrato").maybeSingle();
-      if (!own) return json({ error: "Sem permissão para gerenciar usuários deste contrato" }, 403);
+      
       const touchesManager = (body.action === "create" && body.accessLevel === "gestor_contrato") || target?.access_level === "gestor_contrato";
+      if (!canManageMembership({ isMaster, activeManager: !!own, suspended: contract.data?.status === "suspenso", targetIsManager: touchesManager, isSelf: target?.user_id === caller })) return json({ error: "Sem permissão para alterar este acesso" }, 403);
       if (touchesManager) return json({ error: "Somente o Master gerencia gestores do contrato" }, 403);
       if (target?.user_id === caller) return json({ error: "Você não pode alterar o próprio acesso" }, 403);
     }
@@ -79,6 +81,14 @@ Deno.serve(async (req) => {
         data: { name: body.name, email: body.email, roleLabel: body.roleLabel || body.accessLevel, authSource: "supabase" },
       });
       if (me) { await admin.auth.admin.deleteUser(created.user.id); return json({ error: "Não foi possível vincular o usuário" }, 400); }
+      if (body.accessLevel === "gestor_contrato" && contract.ministry_id) {
+        const { error: re } = await admin.from("user_roles").insert({ user_id: created.user.id, role: "igreja_mae", ministry_id: contract.ministry_id });
+        if (re) {
+          await admin.from("platform_memberships").delete().eq("user_id", created.user.id).eq("contract_id", contractId);
+          await admin.auth.admin.deleteUser(created.user.id);
+          return json({ error: "Não foi possível vincular o gestor à organização" }, 400);
+        }
+      }
       return json({ ok: true });
     }
     if (!target) return json({ error: "Vínculo não encontrado" }, 404);

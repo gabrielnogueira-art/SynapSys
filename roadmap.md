@@ -3,10 +3,11 @@
 - [x] Remove obsolete public branding storage read policy.
 - [x] Replace unavailable email-hook CORS import.
 - [ ] Enable leaked-password protection: requires Supabase Pro and a change in the owner's external Supabase dashboard.
-- [ ] Review background deep-scan findings when results arrive.
+- [ ] Remediate completed deep-scan permission-helper warnings separately; existing security findings are outside the contracts implementation.
 
 # Centralized contracts
-- [ ] Persist contracts, module configuration and requests in Supabase; provide explicit import of browser-only records.
-- [ ] Resolve client links and apply persisted branding, including printed reports.
-- [ ] Manage real contract accounts with server-side authorization and active membership checks.
-- [ ] Verify persistence, isolation and entry flows; document any external blockers.
+- [x] Persist contracts, module configuration and requests in Supabase; provide explicit import of browser-only records.
+- [x] Resolve client links and apply persisted branding, including printed reports.
+- [x] Manage real contract accounts with server-side authorization and active membership checks.
+- [x] Verify permission rules and signed-out desktop/mobile entry flows; confirm seeded contracts/memberships and error-free builds.
+- [ ] Validate authenticated save/reload, new-account creation and cross-contract UI end-to-end: external Supabase has no managed test session.
