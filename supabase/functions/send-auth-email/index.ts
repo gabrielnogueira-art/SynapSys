@@ -3,7 +3,11 @@
 // URL: https://<project-ref>.functions.supabase.co/send-auth-email
 // Secret: same value as SEND_EMAIL_HOOK_SECRET env var (v1,whsec_...)
 import { Webhook } from "https://esm.sh/standardwebhooks@1.0.0";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "content-type, webhook-id, webhook-timestamp, webhook-signature",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const HOOK_SECRET = Deno.env.get("SEND_EMAIL_HOOK_SECRET");
