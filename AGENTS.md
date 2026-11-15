@@ -6,3 +6,4 @@
 - Public branding is projected into a separate read-only directory table; private-schema triggers synchronize it without exposing commercial fields.
 - Linked ministry and contract branding synchronize bidirectionally through depth-guarded triggers so either editor updates the same identity.
 - Real contract accounts are provisioned only through authenticated administrative edge functions; church managers additionally receive the linked ministry role.
+- User-affiliation getters, has_role, headquarters/regional deletion checks and congregation-structure management checks accept only the caller's auth.uid(); verified service-role calls may evaluate another identity to preserve protected administrative workflows.
