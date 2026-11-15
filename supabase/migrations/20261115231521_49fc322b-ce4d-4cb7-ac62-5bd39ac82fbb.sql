@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "branding public read" ON storage.objects;
