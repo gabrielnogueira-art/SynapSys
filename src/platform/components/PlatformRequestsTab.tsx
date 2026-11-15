@@ -21,9 +21,9 @@ interface PlatformRequestsTabProps {
   contracts: PlatformContract[];
   requests: ChangeRequest[];
   preselectedContractId?: string;
-  onAddRequest: (req: Omit<ChangeRequest, "id" | "createdAt" | "status">) => void;
-  onUpdateStatus: (id: string, status: ChangeRequest["status"]) => void;
-  onDeleteRequest: (id: string) => void;
+  onAddRequest: (req: Omit<ChangeRequest, "id" | "createdAt" | "status">) => Promise<void>;
+  onUpdateStatus: (id: string, status: ChangeRequest["status"]) => Promise<void>;
+  onDeleteRequest: (id: string) => Promise<void>;
 }
 
 export const PlatformRequestsTab = ({
@@ -57,10 +57,11 @@ export const PlatformRequestsTab = ({
     );
   }, [requests, filterContractId]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contractId || !title.trim() || !description.trim()) return;
-    onAddRequest({
+    try {
+    await onAddRequest({
       contractId,
       targetModule,
       title: title.trim(),
@@ -72,6 +73,7 @@ export const PlatformRequestsTab = ({
       title: "Solicitação registrada!",
       description: "Use o botão 'Copiar Prompt p/ IA' quando quiser pedir a alteração aqui.",
     });
+    } catch (e: any) { toast({ variant: "destructive", title: "Falha ao salvar solicitação", description: e.message }); }
   };
 
   const copyPrompt = async (req: ChangeRequest) => {
@@ -263,7 +265,7 @@ export const PlatformRequestsTab = ({
                       <Select
                         value={req.status}
                         onValueChange={(v) =>
-                          onUpdateStatus(req.id, v as ChangeRequest["status"])
+                          onUpdateStatus(req.id, v as ChangeRequest["status"]).catch((e) => toast({ variant: "destructive", title: "Falha ao atualizar", description: e.message }))
                         }
                       >
                         <SelectTrigger className="h-8 w-36 text-xs">
@@ -297,7 +299,7 @@ export const PlatformRequestsTab = ({
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8"
-                        onClick={() => onDeleteRequest(req.id)}
+                        onClick={() => onDeleteRequest(req.id).catch((e) => toast({ variant: "destructive", title: "Falha ao excluir", description: e.message }))}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>

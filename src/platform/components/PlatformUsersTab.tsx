@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,14 +22,16 @@ import {
 } from "@/components/ui/table";
 import { Ban, CheckCircle2, ExternalLink, Eye, Plus, Search, Trash2 } from "lucide-react";
 import { PlatformContract, PlatformUser, UserAccessLevel } from "@/platform/types";
+import { useToast } from "@/hooks/use-toast";
 import { switchToClientSimulation } from "@/platform/session";
 
 interface PlatformUsersTabProps {
   contracts: PlatformContract[];
   users: PlatformUser[];
-  onAddUser: (user: Omit<PlatformUser, "id" | "createdAt">) => void;
-  onUpdateStatus: (userId: string, status: PlatformUser["status"]) => void;
-  onDeleteUser: (userId: string) => void;
+  onAddUser: (user: Omit<PlatformUser, "id" | "createdAt"> & { password: string }) => Promise<void>;
+  onUpdateStatus: (userId: string, status: PlatformUser["status"]) => Promise<void>;
+  onDeleteUser: (userId: string) => Promise<void>;
+  isMaster?: boolean;
 }
 
 const ACCESS_LABELS: Record<UserAccessLevel, string> = {
@@ -45,8 +47,12 @@ export const PlatformUsersTab = ({
   onAddUser,
   onUpdateStatus,
   onDeleteUser,
+  isMaster = true,
 }: PlatformUsersTabProps) => {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [filterContractId, setFilterContractId] = useState<string>("all");
 
@@ -54,8 +60,13 @@ export const PlatformUsersTab = ({
   const [email, setEmail] = useState("");
   const [contractId, setContractId] = useState<string>(contracts[0]?.id ?? "");
   const [roleLabel, setRoleLabel] = useState("");
-  const [accessLevel, setAccessLevel] = useState<UserAccessLevel>("gestor_contrato");
+  const [accessLevel, setAccessLevel] = useState<UserAccessLevel>(isMaster ? "gestor_contrato" : "operador");
 
+  useEffect(() => { if (!contractId && contracts[0]) setContractId(contracts[0].id); }, [contracts, contractId]);
+  const run = async (fn: () => Promise<void>) => {
+    try { await fn(); toast({ title: "Acesso atualizado" }); }
+    catch (e: any) { toast({ variant: "destructive", title: "Não foi possível atualizar", description: e.message }); }
+  };
   const contractById = useMemo(
     () => new Map(contracts.map((c) => [c.id, c])),
     [contracts]
@@ -77,10 +88,13 @@ export const PlatformUsersTab = ({
     });
   }, [users, search, filterContractId, contractById]);
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !email.trim() || !contractId) return;
-    onAddUser({
+    setSaving(true);
+    try {
+    await onAddUser({
+      password,
       name: name.trim(),
       email: email.trim(),
       contractId,
@@ -92,28 +106,14 @@ export const PlatformUsersTab = ({
     setName("");
     setEmail("");
     setRoleLabel("");
+    setPassword("");
+    toast({ title: "Login criado e vinculado ao contrato" });
+    } catch (e: any) { toast({ variant: "destructive", title: "Falha ao criar login", description: e.message }); }
+    finally { setSaving(false); }
   };
 
   return (
     <div className="space-y-6">
-      <Card className="border-indigo-200 bg-indigo-50/40">
-        <CardContent className="py-4 flex flex-wrap items-center justify-between gap-4">
-          <div className="text-sm">
-            <p className="font-semibold text-indigo-950">
-              Usuários reais do Supabase (Sistema EBD — CTR-001)
-            </p>
-            <p className="text-muted-foreground text-xs">
-              Para aprovar cadastros pendentes ou criar logins reais na base Supabase do contrato CTR-001, acesse a Área Administrativa EBD.
-            </p>
-          </div>
-          <Link to="/c/ctr-001-ebd-exemplo/login">
-            <Button size="sm" variant="outline" className="bg-white">
-              Abrir Login / Aprovações Supabase <ExternalLink className="h-3.5 w-3.5 ml-1.5" />
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
-
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Vincular Novo Usuário a um Contrato</CardTitle>
@@ -143,6 +143,10 @@ export const PlatformUsersTab = ({
               />
             </div>
             <div className="space-y-1">
+              <Label htmlFor="new-user-password">Senha inicial *</Label>
+              <Input id="new-user-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
+            </div>
+            <div className="space-y-1">
               <Label>Contrato *</Label>
               <Select value={contractId} onValueChange={setContractId}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
@@ -163,10 +167,9 @@ export const PlatformUsersTab = ({
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gestor_contrato">Gestor do Contrato</SelectItem>
+                  {isMaster && <SelectItem value="gestor_contrato">Gestor do Contrato</SelectItem>}
                   <SelectItem value="operador">Operador / Secretário</SelectItem>
                   <SelectItem value="professor">Professor / Equipe</SelectItem>
-                  <SelectItem value="dono_plataforma">Dono da Plataforma</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -178,8 +181,8 @@ export const PlatformUsersTab = ({
                 onChange={(e) => setRoleLabel(e.target.value)}
               />
             </div>
-            <Button type="submit" className="w-full">
-              <Plus className="h-4 w-4 mr-1" /> Adicionar
+            <Button type="submit" className="w-full" disabled={saving}>
+              <Plus className="h-4 w-4 mr-1" /> {saving ? "Criando…" : "Adicionar"}
             </Button>
           </form>
         </CardContent>
@@ -298,10 +301,10 @@ export const PlatformUsersTab = ({
                             variant="ghost"
                             title={u.status === "bloqueado" ? "Reativar" : "Bloquear"}
                             onClick={() =>
-                              onUpdateStatus(
+                              run(() => onUpdateStatus(
                                 u.id,
                                 u.status === "bloqueado" ? "ativo" : "bloqueado"
-                              )
+                              ))
                             }
                           >
                             {u.status === "bloqueado" ? (
@@ -315,7 +318,7 @@ export const PlatformUsersTab = ({
                               size="icon"
                               variant="ghost"
                               title="Remover usuário"
-                              onClick={() => onDeleteUser(u.id)}
+                              onClick={() => run(() => onDeleteUser(u.id))}
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>

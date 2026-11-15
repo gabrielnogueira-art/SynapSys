@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { CalendarDays, FileText, Download } from "lucide-react";
-import adCamposLogo from "@/assets/ad-campos-logo.png";
+import { ReportIdentity, ReportIdentityData, useReportIdentity } from "./ReportIdentity";
 import { useScopedFilter } from "@/hooks/useScopedFilter";
 
 const BRASILIA_UTC_OFFSET_HOURS = 3;
@@ -65,20 +65,13 @@ interface ReportData {
 }
 
 // Componentes do Relatório (definidos fora para melhor performance)
-const GeneralReport = ({ reportData, selectedDate, ebdObservations, reportTheme }: { reportData: ReportData | null; selectedDate: string; ebdObservations?: string; reportTheme: string }) => {
+const GeneralReport = ({ reportData, selectedDate, ebdObservations, reportTheme, identity }: { identity: ReportIdentityData; reportData: ReportData | null; selectedDate: string; ebdObservations?: string; reportTheme: string }) => {
   const reportYear = selectedDate ? new Date(selectedDate + 'T12:00:00Z').getFullYear() : new Date().getFullYear();
   
   return (
   <div className="bg-white text-black px-6 py-4" style={{ width: '193mm', height: '280mm', fontFamily: 'Arial, sans-serif', display: 'flex', flexDirection: 'column', fontSize: '13pt', boxSizing: 'border-box' }}>
     <header className="flex items-start justify-between pb-1">
-      <div className="flex items-center gap-3">
-        <img src={adCamposLogo} alt="AD Campos Logo" className="w-[70px] h-[70px]" />
-        <div>
-          <h1 className="text-base font-bold">Catedral das Assembleias de Deus em Campos</h1>
-          <h2 className="text-sm">Secretaria da Escola Bíblica Dominical - EBD</h2>
-          <p className="text-xs text-gray-600">Pastor Presidente Paulo Areas de Moraes - Ministério de Madureira</p>
-        </div>
-      </div>
+      <ReportIdentity identity={identity} />
       <div className="text-right">
         <p className="text-sm font-bold">Ano</p>
         <p className="text-3xl font-bold tracking-tighter">{reportYear}</p>
@@ -149,7 +142,7 @@ const GeneralReport = ({ reportData, selectedDate, ebdObservations, reportTheme 
   </div>
 );};
 
-const ClassesReport = ({ reportData, selectedDate, reportTheme }: { reportData: ReportData | null; selectedDate: string; reportTheme: string }) => {
+const ClassesReport = ({ reportData, selectedDate, reportTheme, identity }: { identity: ReportIdentityData; reportData: ReportData | null; selectedDate: string; reportTheme: string }) => {
   const reportYear = selectedDate ? new Date(selectedDate + 'T12:00:00Z').getFullYear() : new Date().getFullYear();
   
   // Separar classes por faixa etária e ordenar por nome
@@ -186,14 +179,7 @@ const ClassesReport = ({ reportData, selectedDate, reportTheme }: { reportData: 
   return (
     <div className="bg-white text-black px-6 py-4" style={{ width: '280mm', height: '193mm', fontFamily: 'Arial, sans-serif', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
       <header className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <img src={adCamposLogo} alt="AD Campos Logo" className="w-14 h-14" />
-          <div>
-            <h1 className="text-sm font-bold">Catedral das Assembleias de Deus em Campos</h1>
-            <h2 className="text-xs">Secretaria da Escola Bíblica Dominical - EBD</h2>
-            <p className="text-[10px] text-gray-700">Pastor Presidente Paulo Areas de Moraes - Ministério de Madureira</p>
-          </div>
-        </div>
+        <ReportIdentity identity={identity} />
         <div className="text-right">
           <p className="text-xs font-bold">Ano {reportYear}</p>
           <p className="text-[10px]"><strong>Data:</strong> {selectedDate ? new Date(selectedDate + 'T12:00:00Z').toLocaleDateString('pt-BR') : ''}</p>
@@ -233,6 +219,7 @@ const ClassesReport = ({ reportData, selectedDate, reportTheme }: { reportData: 
 
 export const ReportsTab = () => {
   const scoped = useScopedFilter();
+  const identity = useReportIdentity();
   const [selectedYear, setSelectedYear] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [reportData, setReportData] = useState<ReportData | null>(null);
@@ -536,14 +523,14 @@ export const ReportsTab = () => {
             </div>
             <div className="border rounded-lg overflow-auto bg-gray-200 p-4 flex justify-center">
               <div style={{ transform: 'scale(0.8)', transformOrigin: 'top center' }}>
-                 {reportType === "general" ? <GeneralReport reportData={reportData} selectedDate={selectedDate} ebdObservations={ebdObservations} reportTheme={reportTheme} /> : <ClassesReport reportData={reportData} selectedDate={selectedDate} reportTheme={reportTheme} />}
+                 {reportType === "general" ? <GeneralReport identity={identity} reportData={reportData} selectedDate={selectedDate} ebdObservations={ebdObservations} reportTheme={reportTheme} /> : <ClassesReport identity={identity} reportData={reportData} selectedDate={selectedDate} reportTheme={reportTheme} />}
               </div>
             </div>
           </div>
 
           <div className="hidden">
             <div ref={printableAreaRef}>
-              {reportType === "general" ? <GeneralReport reportData={reportData} selectedDate={selectedDate} ebdObservations={ebdObservations} reportTheme={reportTheme} /> : <ClassesReport reportData={reportData} selectedDate={selectedDate} reportTheme={reportTheme} />}
+              {reportType === "general" ? <GeneralReport identity={identity} reportData={reportData} selectedDate={selectedDate} ebdObservations={ebdObservations} reportTheme={reportTheme} /> : <ClassesReport identity={identity} reportData={reportData} selectedDate={selectedDate} reportTheme={reportTheme} />}
             </div>
           </div>
         </>

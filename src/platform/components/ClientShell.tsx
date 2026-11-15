@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { ModuleId, PlatformContract } from "@/platform/types";
 import { getModuleById } from "@/platform/catalog";
+import { useContractAccess } from "@/platform/useContractAccess";
 import { switchToOwnerMode, useViewerSession } from "@/platform/session";
 
 export interface ShellSidebarItem {
@@ -73,6 +74,7 @@ export const ClientShell = ({
 }: ClientShellProps) => {
   const navigate = useNavigate();
   const session = useViewerSession();
+  const access = useContractAccess(contract.id);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -83,12 +85,11 @@ export const ClientShell = ({
       : (getModuleById(activeArea)?.shortName ?? activeArea).toUpperCase();
 
   const institutionHeader = (
-    customInstitutionTitle ||
     [contract.clientName, contract.city].filter(Boolean).join(" — ")
   ).toUpperCase();
 
   const leaderSub =
-    customLeaderSubtitle ||
+    contract.branding?.presidentPastor ||
     (contract.responsibleName
       ? contract.segment === "igreja"
         ? `PASTOR / RESPONSÁVEL: ${contract.responsibleName.toUpperCase()}`
@@ -146,6 +147,10 @@ export const ClientShell = ({
 
         {/* Navigation Links */}
         <nav className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
+          {access.manager && <>
+            <Button variant="ghost" className="w-full justify-start" title="Usuários do contrato" onClick={() => navigate(`${contract.entryPath}/users`)}><Users className="h-4 w-4 mr-2" />{!collapsed && "Usuários"}</Button>
+            <Button variant="ghost" className="w-full justify-start" title="Configurações do contrato" onClick={() => navigate(`${contract.entryPath}/settings`)}><Building2 className="h-4 w-4 mr-2" />{!collapsed && "Configurações"}</Button>
+          </>}
           {sidebarItems.map((item) => (
             <button
               key={item.id}
@@ -196,6 +201,7 @@ export const ClientShell = ({
               <Menu className="h-5 w-5" />
             </Button>
 
+            {contract.branding?.logoUrl && <img src={contract.branding.logoUrl} alt={contract.clientName} className="h-9 w-9 object-contain shrink-0" />}
             <div className="min-w-0">
               <div className="text-xs sm:text-sm font-bold tracking-wide truncate text-white">
                 {institutionHeader}

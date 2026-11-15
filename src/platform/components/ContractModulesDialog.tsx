@@ -1,158 +1,64 @@
 import { useEffect, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import {
-  ContractStatus,
-  ModuleId,
-  PlatformContract,
-} from "@/platform/types";
-import { getModulesBySegment, SEGMENT_DEFINITIONS } from "@/platform/catalog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PlatformContract, ModuleId, ContractStatus } from "@/platform/types";
+import { getModulesBySegment } from "@/platform/catalog";
+import { useToast } from "@/hooks/use-toast";
 
-interface ContractModulesDialogProps {
+interface Props {
   contract: PlatformContract | null;
   onClose: () => void;
-  onSave: (contractId: string, patch: Partial<PlatformContract>) => void;
+  onSave: (id: string, patch: Partial<PlatformContract>) => Promise<void>;
+  brandingOnly?: boolean;
 }
-
-export const ContractModulesDialog = ({
-  contract,
-  onClose,
-  onSave,
-}: ContractModulesDialogProps) => {
-  const [clientName, setClientName] = useState("");
-  const [status, setStatus] = useState<ContractStatus>("ativo");
-  const [activeModules, setActiveModules] = useState<ModuleId[]>([]);
-  const [notes, setNotes] = useState("");
-
-  useEffect(() => {
-    if (!contract) return;
-    setClientName(contract.clientName);
-    setStatus(contract.status);
-    setActiveModules(contract.activeModules);
-    setNotes(contract.notes ?? "");
-  }, [contract]);
-
+export const ContractModulesDialog = ({ contract, onClose, onSave, brandingOnly = false }: Props) => {
+  const { toast } = useToast();
+  const [draft, setDraft] = useState<Partial<PlatformContract>>({});
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { if (contract) setDraft({ ...contract }); }, [contract]);
   if (!contract) return null;
-
-  const availableModules = getModulesBySegment(contract.segment);
-
-  const toggleModule = (modId: ModuleId) => {
-    setActiveModules((prev) =>
-      prev.includes(modId)
-        ? prev.length > 1
-          ? prev.filter((m) => m !== modId)
-          : prev
-        : [...prev, modId]
-    );
+  const field = (key: keyof PlatformContract, value: unknown) => setDraft((d) => ({ ...d, [key]: value }));
+  const brand = (key: "logoUrl" | "primaryHsl" | "presidentPastor", value: string) => setDraft((d) => ({ ...d, branding: { ...d.branding, [key]: value || null } }));
+  const save = async () => {
+    setSaving(true);
+    try {
+      await onSave(contract.id, brandingOnly ? { branding: draft.branding } : draft);
+      toast({ title: "Alterações salvas no Supabase" });
+      onClose();
+    } catch (e: any) { toast({ variant: "destructive", title: "Não foi possível salvar", description: e.message }); }
+    finally { setSaving(false); }
   };
-
-  const handleSave = () => {
-    onSave(contract.id, {
-      clientName: clientName.trim() || contract.clientName,
-      status,
-      activeModules,
-      notes: notes.trim() || undefined,
-    });
-    onClose();
-  };
-
-  return (
-    <Dialog open={!!contract} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>
-            Configurar Contrato {contract.code}
-          </DialogTitle>
-          <DialogDescription>
-            Segmento: {SEGMENT_DEFINITIONS[contract.segment].name} • Pasta:{" "}
-            <span className="font-mono text-xs">GitHub/{contract.codeFolder}/</span>
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <Label>Nome do Cliente</Label>
-            <Input value={clientName} onChange={(e) => setClientName(e.target.value)} />
+  return <Dialog open onOpenChange={(v) => { if (!v && !saving) onClose(); }}>
+    <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogHeader><DialogTitle>Configurar {contract.code}</DialogTitle></DialogHeader>
+      <div className="space-y-4">
+        {!brandingOnly && <>
+          <Label htmlFor="contract-client">Nome do cliente</Label><Input id="contract-client" value={draft.clientName ?? ""} onChange={(e) => field("clientName", e.target.value)} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div><Label htmlFor="contract-city">Cidade / UF</Label><Input id="contract-city" value={draft.city ?? ""} onChange={(e) => field("city", e.target.value)} /></div>
+            <div><Label htmlFor="contract-responsible">Responsável</Label><Input id="contract-responsible" value={draft.responsibleName ?? ""} onChange={(e) => field("responsibleName", e.target.value)} /></div>
+            <div><Label htmlFor="contract-email">E-mail de contato</Label><Input id="contract-email" type="email" value={draft.responsibleEmail ?? ""} onChange={(e) => field("responsibleEmail", e.target.value)} /></div>
+            <div><Label htmlFor="contract-plan">Plano</Label><Input id="contract-plan" value={draft.planName ?? ""} onChange={(e) => field("planName", e.target.value)} /></div>
+            <div><Label htmlFor="contract-price">Valor mensal (R$)</Label><Input id="contract-price" type="number" min="0" step="0.01" value={draft.monthlyValue ?? ""} onChange={(e) => field("monthlyValue", e.target.value ? Number(e.target.value) : undefined)} /></div>
+            <div><Label>Status</Label><Select value={draft.status} onValueChange={(v) => field("status", v as ContractStatus)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["ativo", "implantacao", "demonstracao", "suspenso"].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
           </div>
-
-          <div className="space-y-1">
-            <Label>Status</Label>
-            <Select value={status} onValueChange={(v) => setStatus(v as ContractStatus)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ativo">Ativo</SelectItem>
-                <SelectItem value="implantacao">Em implantação</SelectItem>
-                <SelectItem value="demonstracao">Demonstração</SelectItem>
-                <SelectItem value="suspenso">Suspenso</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Módulos Ativos neste Contrato</Label>
-            <div className="space-y-2">
-              {availableModules.map((mod) => {
-                const checked = activeModules.includes(mod.id);
-                return (
-                  <label
-                    key={mod.id}
-                    className={`flex items-start gap-2.5 p-2.5 rounded-md border cursor-pointer ${
-                      checked ? "border-primary bg-primary/5" : "border-border"
-                    }`}
-                  >
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={() => toggleModule(mod.id)}
-                      className="mt-0.5"
-                    />
-                    <div className="text-sm">
-                      <div className="font-medium flex items-center gap-2">
-                        {mod.name}
-                        <Badge
-                          variant={mod.maturity === "producao" ? "default" : "secondary"}
-                          className="text-[10px] h-4"
-                        >
-                          {mod.maturity === "producao" ? "Produção" : "Preview"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{mod.description}</p>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <Label>Notas do Contrato</Label>
-            <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
+          <Label>Módulos ativos</Label>
+          <div className="space-y-2">{getModulesBySegment(contract.segment).map((m) => <label key={m.id} className="flex gap-2 items-center text-sm"><Checkbox checked={draft.activeModules?.includes(m.id)} onCheckedChange={(checked) => field("activeModules", checked ? [...(draft.activeModules ?? []), m.id] : (draft.activeModules ?? []).filter((x: ModuleId) => x !== m.id))} />{m.name}</label>)}</div>
+          <Label htmlFor="contract-notes">Notas</Label><Textarea id="contract-notes" value={draft.notes ?? ""} onChange={(e) => field("notes", e.target.value)} />
+        </>}
+        <div className="border-t pt-4 space-y-3">
+          <div><Label htmlFor="contract-logo">Logo (endereço HTTPS)</Label><Input id="contract-logo" type="url" value={draft.branding?.logoUrl ?? ""} onChange={(e) => brand("logoUrl", e.target.value)} /></div>
+          <div><Label htmlFor="contract-pastor">Pastor presidente / líder</Label><Input id="contract-pastor" value={draft.branding?.presidentPastor ?? ""} onChange={(e) => brand("presidentPastor", e.target.value)} /></div>
+          <div><Label htmlFor="contract-color">Cor principal (H S% L%)</Label><Input id="contract-color" placeholder="150 60% 35%" value={draft.branding?.primaryHsl ?? ""} onChange={(e) => brand("primaryHsl", e.target.value)} /></div>
+          {draft.branding?.logoUrl && <img src={draft.branding.logoUrl} alt="Logo do contrato" className="h-16 max-w-full object-contain" />}
         </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave}>Salvar Alterações</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+      </div>
+      <DialogFooter><Button variant="outline" disabled={saving} onClick={onClose}>Cancelar</Button><Button disabled={saving || (!brandingOnly && (!draft.clientName?.trim() || !draft.activeModules?.length))} onClick={save}>{saving ? "Salvando…" : "Salvar Alterações"}</Button></DialogFooter>
+    </DialogContent>
+  </Dialog>;
 };

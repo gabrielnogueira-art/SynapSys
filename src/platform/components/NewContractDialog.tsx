@@ -32,13 +32,14 @@ import {
   SEGMENT_DEFINITIONS,
   slugifyContractFolder,
 } from "@/platform/catalog";
+import { useToast } from "@/hooks/use-toast";
 import { NewContractInput } from "@/platform/store";
 
 interface NewContractDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   nextCodePreview: string;
-  onCreate: (input: NewContractInput) => PlatformContract;
+  onCreate: (input: NewContractInput) => Promise<PlatformContract>;
 }
 
 export const NewContractDialog = ({
@@ -47,6 +48,8 @@ export const NewContractDialog = ({
   nextCodePreview,
   onCreate,
 }: NewContractDialogProps) => {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
   const [clientName, setClientName] = useState("");
   const [segment, setSegment] = useState<ProjectSegment>("igreja");
   const [status, setStatus] = useState<ContractStatus>("ativo");
@@ -76,11 +79,13 @@ export const NewContractDialog = ({
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientName.trim() || selectedModules.length === 0) return;
 
-    onCreate({
+    setSaving(true);
+    try {
+    await onCreate({
       clientName,
       segment,
       status,
@@ -102,6 +107,8 @@ export const NewContractDialog = ({
     setMonthlyValue("");
     setNotes("");
     onOpenChange(false);
+    } catch (e: any) { toast({ variant: "destructive", title: "Não foi possível criar contrato", description: e.message }); }
+    finally { setSaving(false); }
   };
 
   return (
@@ -201,7 +208,7 @@ export const NewContractDialog = ({
             </div>
 
             <div className="space-y-1">
-              <Label>E-mail do Gestor (cria acesso vinculado)</Label>
+              <Label>E-mail de contato do gestor</Label>
               <Input
                 type="email"
                 placeholder="gestor@cliente.com"
@@ -280,7 +287,7 @@ export const NewContractDialog = ({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
-            <Button type="submit">Criar Contrato</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Salvando…" : "Criar Contrato"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
