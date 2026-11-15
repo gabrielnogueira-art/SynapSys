@@ -243,6 +243,35 @@ export type Database = {
           },
         ]
       }
+      platform_contract_directory: {
+        Row: {
+          created_at: string
+          data: Json
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_contract_directory_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "platform_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_contracts: {
         Row: {
           code: string
@@ -314,13 +343,6 @@ export type Database = {
             foreignKeyName: "platform_memberships_contract_id_fkey"
             columns: ["contract_id"]
             isOneToOne: false
-            referencedRelation: "platform_contract_directory"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "platform_memberships_contract_id_fkey"
-            columns: ["contract_id"]
-            isOneToOne: false
             referencedRelation: "platform_contracts"
             referencedColumns: ["id"]
           },
@@ -352,13 +374,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "platform_requests_contract_id_fkey"
-            columns: ["contract_id"]
-            isOneToOne: false
-            referencedRelation: "platform_contract_directory"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "platform_requests_contract_id_fkey"
             columns: ["contract_id"]
@@ -641,24 +656,7 @@ export type Database = {
       }
     }
     Views: {
-      platform_contract_directory: {
-        Row: {
-          code: string | null
-          data: Json | null
-          id: string | null
-        }
-        Insert: {
-          code?: string | null
-          data?: never
-          id?: string | null
-        }
-        Update: {
-          code?: string | null
-          data?: never
-          id?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       approve_user: {
