@@ -243,6 +243,117 @@ export type Database = {
           },
         ]
       }
+      platform_contracts: {
+        Row: {
+          code: string
+          created_at: string
+          data: Json
+          id: string
+          ministry_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          data: Json
+          id: string
+          ministry_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          data?: Json
+          id?: string
+          ministry_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_contracts_ministry_id_fkey"
+            columns: ["ministry_id"]
+            isOneToOne: false
+            referencedRelation: "ministries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_memberships: {
+        Row: {
+          access_level: string
+          contract_id: string
+          created_at: string
+          data: Json
+          id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_level?: string
+          contract_id: string
+          created_at?: string
+          data?: Json
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_level?: string
+          contract_id?: string
+          created_at?: string
+          data?: Json
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_memberships_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "platform_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_requests: {
+        Row: {
+          contract_id: string
+          created_at: string
+          created_by: string
+          data: Json
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          created_by?: string
+          data: Json
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          created_by?: string
+          data?: Json
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_requests_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "platform_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       "public.ministries": {
         Row: {
           created_at: string
@@ -563,7 +674,12 @@ export type Database = {
         Returns: boolean
       }
       is_master: { Args: { _user_id: string }; Returns: boolean }
+      platform_can_access: {
+        Args: { _contract_id: string; _manage?: boolean }
+        Returns: boolean
+      }
       reject_user: { Args: { _pending_id: string }; Returns: undefined }
+      resolve_platform_contract: { Args: { _id: string }; Returns: Json }
       teacher_has_class: {
         Args: { _class_id: number; _user_id: string }
         Returns: boolean
