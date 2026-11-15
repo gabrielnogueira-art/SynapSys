@@ -314,6 +314,13 @@ export type Database = {
             foreignKeyName: "platform_memberships_contract_id_fkey"
             columns: ["contract_id"]
             isOneToOne: false
+            referencedRelation: "platform_contract_directory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_memberships_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
             referencedRelation: "platform_contracts"
             referencedColumns: ["id"]
           },
@@ -345,6 +352,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "platform_requests_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "platform_contract_directory"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "platform_requests_contract_id_fkey"
             columns: ["contract_id"]
@@ -627,7 +641,24 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      platform_contract_directory: {
+        Row: {
+          code: string | null
+          data: Json | null
+          id: string | null
+        }
+        Insert: {
+          code?: string | null
+          data?: never
+          id?: string | null
+        }
+        Update: {
+          code?: string | null
+          data?: never
+          id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       approve_user: {
@@ -674,12 +705,7 @@ export type Database = {
         Returns: boolean
       }
       is_master: { Args: { _user_id: string }; Returns: boolean }
-      platform_can_access: {
-        Args: { _contract_id: string; _manage?: boolean }
-        Returns: boolean
-      }
       reject_user: { Args: { _pending_id: string }; Returns: undefined }
-      resolve_platform_contract: { Args: { _id: string }; Returns: Json }
       teacher_has_class: {
         Args: { _class_id: number; _user_id: string }
         Returns: boolean
