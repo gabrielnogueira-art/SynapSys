@@ -670,6 +670,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      create_platform_contract: {
+        Args: { _code: string; _data: Json; _id: string }
+        Returns: undefined
+      }
       get_admin_dashboard_summary: {
         Args: { _class_ids?: number[]; _today?: string }
         Returns: Json
