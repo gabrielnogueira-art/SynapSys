@@ -23,10 +23,6 @@ const Login = () => {
   const nextPath = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : null;
 
   const routeByRole = async (userId: string) => {
-    if (nextPath) {
-      window.location.href = nextPath;
-      return;
-    }
     const { data: roles } = await supabase
       .from("user_roles" as any)
       .select("role")
@@ -34,6 +30,16 @@ const Login = () => {
 
     const roleList = ((roles as unknown) as Array<{ role: string }>) || [];
     const has = (r: string) => roleList.some((x) => x.role === r);
+
+    if (nextPath && nextPath !== "/plataforma") {
+      navigate(nextPath, { replace: true });
+      return;
+    }
+    if (!has("master")) {
+      const { data: memberships } = await supabase.from("platform_memberships").select("contract_id").eq("user_id", userId).eq("status", "ativo");
+      const own = memberships?.[0];
+      if (own) { navigate(`/c/${own.contract_id}`, { replace: true }); return; }
+    }
 
     if (has("master")) navigate("/plataforma");
     else if (has("igreja_mae")) navigate(resolve("/admin?scope=ministry"));
