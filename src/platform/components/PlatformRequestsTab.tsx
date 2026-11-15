@@ -299,7 +299,7 @@ export const PlatformRequestsTab = ({
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8"
-                        onClick={() => onDeleteRequest(req.id).catch((e) => toast({ variant: "destructive", title: "Falha ao excluir", description: e.message }))
+                        onClick={() => onDeleteRequest(req.id).catch((e) => toast({ variant: "destructive", title: "Falha ao excluir", description: e.message }))}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>

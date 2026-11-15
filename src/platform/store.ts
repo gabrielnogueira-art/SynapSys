@@ -86,7 +86,7 @@ function init() {
   if (initialized) return;
   initialized = true;
   reloadPlatformStore();
-  supabase.auth.onAuthStateChange(() => setTimeout(reloadPlatformStore, 0));
+  supabase.auth.onAuthStateChange(() => { setTimeout(reloadPlatformStore, 0); });
   window.addEventListener(STORE_EVENT, () => reloadPlatformStore());
 }
 
