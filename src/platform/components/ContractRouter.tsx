@@ -1,4 +1,4 @@
-import { Link, Route, Routes, useParams } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
@@ -13,7 +13,11 @@ import Signup from "@/pages/Signup";
 import Admin from "@/pages/Admin";
 import Professor from "@/pages/Professor";
 import { PlatformContract } from "@/platform/types";
-import { canAccessContract, useViewerSession } from "@/platform/session";
+import { useContractAccess } from "@/platform/useContractAccess";
+import { useUserRole } from "@/hooks/useUserRole";
+import { PlatformUsersTab } from "./PlatformUsersTab";
+import { ContractModulesDialog } from "./ContractModulesDialog";
+import { useViewerSession } from "@/platform/session";
 
 function WithBanner({
   contract,
@@ -36,10 +40,19 @@ function WithBanner({
  */
 export const ContractRouter = () => {
   const { contractId } = useParams<{ contractId: string }>();
-  const { contracts } = usePlatformStore();
+  const store = usePlatformStore();
+  const { contracts, loading, error } = store;
+  const access = useContractAccess(contractId);
+  const role = useUserRole();
+  const location = useLocation();
   const session = useViewerSession();
   const contract = contracts.find((c) => c.id === contractId);
 
+  if (loading || access.loading) return <div className="p-8 text-muted-foreground">Carregando contrato…</div>;
+  if (error) return <div className="p-8" role="alert">{error}</div>;
+  const isLogin = /\/(login|signup)\/?$/.test(location.pathname);
+  if (!isLogin && !access.signedIn) return <Navigate to={`/c/${contractId}/login?next=${encodeURIComponent(location.pathname)}`} replace />;
+  if (!isLogin && !access.allowed) return <div className="p-8 space-y-4"><h1 className="text-xl">Acesso restrito</h1><p>Seu usuário não possui vínculo ativo com este contrato.</p><Link to="/login">Voltar ao login</Link></div>;
   if (!contract) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
@@ -64,7 +77,7 @@ export const ContractRouter = () => {
   }
 
   // Isolamento de contrato na interface: usuário de um contrato não acessa outro contrato
-  if (!canAccessContract(session, contract.id)) {
+  if (contract.status === "suspenso" && role.role !== "master" && !isLogin) {
     const ownContract =
       session.mode === "client"
         ? contracts.find((c) => c.id === session.contractId)
@@ -94,10 +107,12 @@ export const ContractRouter = () => {
     );
   }
 
-  const EntryComponent = CONTRACT_COMPONENTS[contract.id] ?? GenericContractEntry;
+  const EntryComponent = GenericContractEntry;
 
   return (
     <Routes>
+      <Route path="users" element={access.manager ? <WithBanner contract={contract}><div className="p-4"><PlatformUsersTab contracts={[contract]} users={store.users.filter((u) => u.contractId === contract.id)} isMaster={role.role === "master"} onAddUser={store.addUser} onUpdateStatus={store.updateUserStatus} onDeleteUser={store.deleteUser} /></div></WithBanner> : <Navigate to={contract.entryPath} replace />} />
+      <Route path="settings" element={access.manager ? <ContractModulesDialog contract={contract} brandingOnly={role.role !== "master"} onClose={() => window.location.assign(contract.entryPath)} onSave={async (id, patch) => { if (role.role === "master") await store.updateContract(id, patch); else await store.updateBranding(id, patch.branding); }} /> : <Navigate to={contract.entryPath} replace />} />
       <Route index element={<EntryComponent contract={contract} />} />
       <Route
         path="form"

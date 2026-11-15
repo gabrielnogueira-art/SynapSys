@@ -35,13 +35,18 @@ const Login = () => {
     const roleList = ((roles as unknown) as Array<{ role: string }>) || [];
     const has = (r: string) => roleList.some((x) => x.role === r);
 
-    if (has("master")) navigate(resolve("/admin?scope=master"));
+    if (has("master")) navigate("/plataforma");
     else if (has("igreja_mae")) navigate(resolve("/admin?scope=ministry"));
     else if (has("igreja_sede")) navigate(resolve("/admin?scope=headquarters"));
     else if (has("admin_regional")) navigate(resolve("/admin?scope=regional"));
     else if (has("secretario_ebd")) navigate(resolve("/admin?scope=congregation"));
     else if (has("professor_classe")) navigate(resolve("/professor"));
-    else navigate(resolve("/admin"));
+    else {
+      const { data: memberships } = await supabase.from("platform_memberships").select("contract_id").eq("user_id", userId).eq("status", "ativo");
+      const own = memberships?.[0];
+      if (own) navigate(`/c/${own.contract_id}`);
+      else { await supabase.auth.signOut(); toast({ variant: "destructive", title: "Nenhum contrato ativo vinculado" }); }
+    }
   };
 
   useEffect(() => {
