@@ -8,6 +8,7 @@ import { buildAntigravityEditPrompt, getModuleById, SEGMENT_DEFINITIONS } from "
 import { useToast } from "@/hooks/use-toast";
 import { switchToClientSimulation, useViewerSession } from "@/platform/session";
 import { useUserRole } from "@/hooks/useUserRole";
+import { ContractLinkMenu } from "./ContractLinkMenu";
 
 interface ContractBannerProps {
   contract: PlatformContract;
@@ -188,6 +189,7 @@ export const ContractBanner = ({
             )}
           </Button>
 
+          <ContractLinkMenu contract={contract} />
           <Button
             size="sm"
             variant="ghost"

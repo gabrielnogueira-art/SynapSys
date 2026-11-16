@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PlatformContract, ModuleId, ContractStatus } from "@/platform/types";
 import { getModulesBySegment } from "@/platform/catalog";
 import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { contractPublicUrl, validateContractSlug } from "@/platform/contractLinks";
 
 interface Props {
   contract: PlatformContract | null;
@@ -27,6 +29,7 @@ export const ContractModulesDialog = ({ contract, onClose, onSave, brandingOnly 
   const save = async () => {
     setSaving(true);
     try {
+      if (!brandingOnly && draft.slug) validateContractSlug(draft.slug);
       await onSave(contract.id, brandingOnly ? { branding: draft.branding } : draft);
       toast({ title: "Alterações salvas no Supabase" });
       onClose();
@@ -39,6 +42,12 @@ export const ContractModulesDialog = ({ contract, onClose, onSave, brandingOnly 
       <div className="space-y-4">
         {!brandingOnly && <>
           <Label htmlFor="contract-client">Nome do cliente</Label><Input id="contract-client" value={draft.clientName ?? ""} onChange={(e) => field("clientName", e.target.value)} />
+          <div className="space-y-1">
+            <Label htmlFor="contract-slug">Link amigável do cliente</Label>
+            <Input id="contract-slug" placeholder={contract.id} value={draft.slug ?? ""} maxLength={80} onChange={(e) => field("slug", e.target.value.toLowerCase())} />
+            <p className="text-xs text-muted-foreground break-all">{contractPublicUrl({ id: contract.id, slug: draft.slug })}</p>
+          </div>
+          <div className="flex items-center justify-between gap-3"><Label htmlFor="contract-login-first">Exigir login na entrada</Label><Switch id="contract-login-first" checked={draft.requireLoginOnEntry ?? false} onCheckedChange={(value) => field("requireLoginOnEntry", value)} /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><Label htmlFor="contract-city">Cidade / UF</Label><Input id="contract-city" value={draft.city ?? ""} onChange={(e) => field("city", e.target.value)} /></div>
             <div><Label htmlFor="contract-responsible">Responsável</Label><Input id="contract-responsible" value={draft.responsibleName ?? ""} onChange={(e) => field("responsibleName", e.target.value)} /></div>
