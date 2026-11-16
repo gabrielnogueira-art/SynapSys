@@ -63,6 +63,8 @@ export interface PlatformContract {
   isReferenceExample?: boolean;
   notes?: string;
   createdAt: string;
+  memberModuleOverrides?: Record<string, ModuleId[]>;
+  memberModuleLevelOverrides?: Record<string, Partial<Record<ModuleId, string>>>;
   branding?: {
     logoUrl?: string | null;
     primaryHsl?: string | null;
@@ -85,7 +87,22 @@ export interface PlatformUser {
   accessLevel: UserAccessLevel;
   authSource: AuthSource;
   status: "ativo" | "pendente" | "bloqueado";
+  allowedModules?: ModuleId[];
+  moduleLevels?: Partial<Record<ModuleId, string>>;
+  ebdAdmin?: boolean;
   notes?: string;
+  createdAt: string;
+}
+
+export interface PendingAccessRequest {
+  id: string;
+  userId: string | null;
+  email: string;
+  displayName: string;
+  contractId: string | null;
+  requestedArea?: string | null;
+  notes?: string | null;
+  status: "pending" | "approved" | "rejected";
   createdAt: string;
 }
 

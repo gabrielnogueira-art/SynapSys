@@ -1,11 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
   contractEntryPath,
+  contractModulePath,
+  contractModulePublicUrl,
   contractPublicUrl,
   DEFAULT_PUBLIC_APP_ORIGIN,
   detectPlatformOrigin,
   isEphemeralOrLocalOrigin,
+  isModuleAllowed,
+  moduleRouteSlug,
   normalizeContractSlug,
+  resolveModuleFromSlug,
   resolvePublicAppOrigin,
   shouldRequireEntryLogin,
   validateContractSlug,
@@ -107,5 +112,25 @@ describe("client addresses", () => {
     expect(() => validateContractSlug("../outro/login")).toThrow();
     expect(() => validateContractSlug("A".repeat(81))).toThrow();
     expect(validateContractSlug("adcampos")).toBe("adcampos");
+  });
+
+  test("builds and resolves module-specific links", () => {
+    expect(moduleRouteSlug("igreja_tesouraria")).toBe("tesouraria");
+    expect(resolveModuleFromSlug("igreja", "tesouraria")).toBe("igreja_tesouraria");
+    expect(resolveModuleFromSlug("comercio", "estoque")).toBe("comercio_estoque");
+    expect(resolveModuleFromSlug("igreja", "estoque")).toBeNull();
+    expect(contractModulePath({ id: "ctr-001-ebd-exemplo", slug: "ad-madureira" }, "igreja_ebd")).toBe(
+      "/c/ad-madureira/ebd"
+    );
+    expect(
+      contractModulePublicUrl({ id: "ctr-001-ebd-exemplo", slug: "ad-madureira" }, "igreja_tesouraria")
+    ).toBe("https://synapsys-group.lovable.app/c/ad-madureira/tesouraria");
+  });
+
+  test("evaluates per-user module permissions", () => {
+    expect(isModuleAllowed(undefined, "igreja_ebd")).toBe(true);
+    expect(isModuleAllowed(null, "igreja_tesouraria")).toBe(true);
+    expect(isModuleAllowed(["igreja_ebd"], "igreja_ebd")).toBe(true);
+    expect(isModuleAllowed(["igreja_ebd"], "igreja_tesouraria")).toBe(false);
   });
 });

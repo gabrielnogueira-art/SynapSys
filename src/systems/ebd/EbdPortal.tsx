@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { FileText, UserCog, Music4, ShieldCheck } from "lucide-react";
 import { TodayStatusDialog } from "@/components/TodayStatusDialog";
 import { ContractOverrides, PlatformContract } from "@/platform/types";
+import { useContractAccess } from "@/platform/useContractAccess";
+import { useUserRole } from "@/hooks/useUserRole";
 
 interface EbdPortalProps {
   contract?: PlatformContract;
@@ -14,9 +16,13 @@ interface EbdPortalProps {
 
 /**
  * Portal do Sistema de Gestão da EBD (produção / Supabase).
- * Funciona tanto de forma isolada em /ebd quanto dentro de um contrato (/c/:contractId).
+ * Quando o usuário já está autenticado no contrato, a Área Administrativa
+ * abre o painel diretamente sem exigir um segundo login.
  */
 export const EbdPortal = ({ contract, overrides, basePath = "" }: EbdPortalProps) => {
+  const access = useContractAccess(contract?.id);
+  const role = useUserRole();
+
   const title = overrides?.customBrandTitle || "Sistema de Gestão da EBD";
   const subtitle =
     overrides?.customSubtitle ||
@@ -24,7 +30,18 @@ export const EbdPortal = ({ contract, overrides, basePath = "" }: EbdPortalProps
 
   const formPath = basePath ? `${basePath}/form` : "/form";
   const choirPath = basePath ? `${basePath}/coristas` : "/coristas";
-  const loginPath = basePath ? `${basePath}/login` : "/login";
+
+  const isAuthenticated = access.signedIn || Boolean(role.role);
+  const isProfessor = role.role === "professor_classe";
+  const adminTarget = isAuthenticated
+    ? basePath
+      ? `${basePath}${isProfessor ? "/professor" : "/admin"}`
+      : isProfessor
+      ? "/professor"
+      : "/admin"
+    : basePath
+    ? `${basePath}/login?next=${encodeURIComponent(`${basePath}/admin`)}`
+    : "/login";
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center p-4">
@@ -74,15 +91,26 @@ export const EbdPortal = ({ contract, overrides, basePath = "" }: EbdPortalProps
           <Card className="hover:shadow-lg transition-shadow">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <UserCog className="h-5 w-5 text-primary" /> Área Administrativa
+                <UserCog className="h-5 w-5 text-primary" />{" "}
+                {isProfessor ? "Área do Professor" : "Área Administrativa"}
               </CardTitle>
               <CardDescription>
-                Acesso para administradores, secretários e professores da EBD.
+                {isAuthenticated
+                  ? isProfessor
+                    ? "Você já está conectado. Acesse diretamente o painel da sua classe."
+                    : "Você já está conectado. Acesse o painel administrativo sem novo login."
+                  : "Acesso para administradores, secretários e professores da EBD."}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Link to={loginPath}>
-                <Button variant="secondary" className="w-full">Login</Button>
+              <Link to={adminTarget}>
+                <Button variant="secondary" className="w-full">
+                  {isAuthenticated
+                    ? isProfessor
+                      ? "Acessar Painel"
+                      : "Acessar Painel ADM"
+                    : "Login"}
+                </Button>
               </Link>
             </CardContent>
           </Card>

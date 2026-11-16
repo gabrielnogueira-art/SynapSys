@@ -49,6 +49,8 @@ interface ClientShellProps {
   activeArea: AreaKey;
   onSelectArea: (area: AreaKey) => void;
   sidebarItems: ShellSidebarItem[];
+  visibleModules?: ModuleId[];
+  showOverview?: boolean;
   customInstitutionTitle?: string;
   customLeaderSubtitle?: string;
   children: ReactNode;
@@ -70,6 +72,8 @@ export const ClientShell = ({
   activeArea,
   onSelectArea,
   sidebarItems,
+  visibleModules,
+  showOverview,
   customInstitutionTitle,
   customLeaderSubtitle,
   children,
@@ -81,6 +85,13 @@ export const ClientShell = ({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+
+  const modulesToDisplay = visibleModules ?? contract.activeModules;
+  const overviewAllowed = showOverview ?? modulesToDisplay.length > 1;
+  const canManageContract =
+    session.mode === "client"
+      ? session.accessLevel === "gestor_contrato"
+      : access.manager;
 
   const areaLabel =
     activeArea === "painel_geral"
@@ -106,6 +117,12 @@ export const ClientShell = ({
   const userDisplay =
     session.mode === "client"
       ? { name: session.userName, role: session.roleLabel, email: session.userEmail }
+      : access.signedIn
+      ? {
+          name: access.userName || access.userEmail || "Usuário",
+          role: access.roleLabel || "Acesso Autenticado",
+          email: access.userEmail || "",
+        }
       : {
           name: contract.responsibleName || "Administrador",
           role: "Acesso Preview (Empreendedor)",
@@ -171,7 +188,7 @@ export const ClientShell = ({
               {!collapsed && <span className="truncate">{item.label}</span>}
             </button>
           ))}
-          {access.manager && (
+          {canManageContract && (
             <div className="pt-2 mt-2 border-t border-white/10 space-y-1">
               <button
                 type="button"
@@ -210,7 +227,7 @@ export const ClientShell = ({
               <Store className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
             )}
             <span className="truncate">
-              {contract.activeModules.length} área(s) contratada(s)
+              {modulesToDisplay.length} área(s) liberada(s)
             </span>
           </div>
         )}
@@ -259,8 +276,8 @@ export const ClientShell = ({
               <PopoverContent align="end" className="w-72 text-sm">
                 <div className="font-semibold mb-1">Avisos de {contract.clientName}</div>
                 <p className="text-xs text-muted-foreground">
-                  Seu ambiente está operando com {contract.activeModules.length} área(s) ativa(s).
-                  Use o botão de grade ao lado para alternar entre as áreas liberadas no seu contrato.
+                  Seu ambiente está operando com {modulesToDisplay.length} área(s) liberada(s).
+                  Use o botão de grade ao lado para alternar entre as áreas disponíveis no seu acesso.
                 </p>
               </PopoverContent>
             </Popover>
@@ -288,26 +305,28 @@ export const ClientShell = ({
                   </Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onSelectArea("painel_geral");
-                      setSwitcherOpen(false);
-                    }}
-                    className={`p-2.5 rounded-lg border text-left flex items-center gap-2.5 transition-colors ${
-                      activeArea === "painel_geral"
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "hover:bg-muted"
-                    }`}
-                  >
-                    <Home className="h-5 w-5 shrink-0" />
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold truncate">Painel Geral</div>
-                      <div className="text-[10px] text-muted-foreground truncate">Visão inicial</div>
-                    </div>
-                  </button>
+                  {overviewAllowed && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSelectArea("painel_geral");
+                        setSwitcherOpen(false);
+                      }}
+                      className={`p-2.5 rounded-lg border text-left flex items-center gap-2.5 transition-colors ${
+                        activeArea === "painel_geral"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "hover:bg-muted"
+                      }`}
+                    >
+                      <Home className="h-5 w-5 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold truncate">Painel Geral</div>
+                        <div className="text-[10px] text-muted-foreground truncate">Visão inicial</div>
+                      </div>
+                    </button>
+                  )}
 
-                  {contract.activeModules.map((modId) => {
+                  {modulesToDisplay.map((modId) => {
                     const mod = getModuleById(modId);
                     const isActive = activeArea === modId;
                     return (
@@ -365,14 +384,16 @@ export const ClientShell = ({
                   </Badge>
                 </div>
                 <div className="pt-2 border-t flex flex-col gap-1.5">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() => onSelectArea("painel_geral")}
-                  >
-                    <Home className="h-3.5 w-3.5 mr-2" /> Ir ao Painel Geral
-                  </Button>
+                  {overviewAllowed && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => onSelectArea("painel_geral")}
+                    >
+                      <Home className="h-3.5 w-3.5 mr-2" /> Ir ao Painel Geral
+                    </Button>
+                  )}
                   {session.mode === "client" && (!role.role || role.role === "master") && (
                     <Button
                       size="sm"
@@ -386,7 +407,7 @@ export const ClientShell = ({
                       <LogOut className="h-3.5 w-3.5 mr-2" /> Encerrar sessão do cliente
                     </Button>
                   )}
-                  {role.role ? (
+                  {access.signedIn || role.role ? (
                     <Button
                       size="sm"
                       variant="outline"

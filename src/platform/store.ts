@@ -1,7 +1,17 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { ChangeRequest, ContractStatus, ModuleId, PlatformContract, PlatformUser, ProjectSegment } from "./types";
+import {
+  ChangeRequest,
+  ContractStatus,
+  ModuleId,
+  PendingAccessRequest,
+  PlatformContract,
+  PlatformUser,
+  ProjectSegment,
+  UserAccessLevel,
+} from "./types";
 import { slugifyContractFolder } from "./catalog";
+import { PLATFORM_ACCESS_EVENT } from "./useContractAccess";
 import {
   contractEntryPath,
   normalizeContractSlug,
@@ -59,6 +69,7 @@ async function isCurrentUserSupabaseMaster(): Promise<boolean> {
 export interface PlatformState {
   contracts: PlatformContract[];
   users: PlatformUser[];
+  pendingRequests: PendingAccessRequest[];
   changeRequests: ChangeRequest[];
   loading: boolean;
   error: string | null;
@@ -79,7 +90,7 @@ export interface NewContractInput {
   notes?: string;
 }
 
-let snapshot: PlatformState = { contracts: [], users: [], changeRequests: [], loading: true, error: null };
+let snapshot: PlatformState = { contracts: [], users: [], pendingRequests: [], changeRequests: [], loading: true, error: null };
 const listeners = new Set<(s: PlatformState) => void>();
 let inflight: Promise<void> | null = null;
 const emit = (s: PlatformState) => { snapshot = s; listeners.forEach((l) => l(s)); };
@@ -112,15 +123,17 @@ export async function reloadPlatformStore() {
       }
 
       let users: PlatformUser[] = [];
+      let pendingRequests: PendingAccessRequest[] = [];
       let changeRequests: ChangeRequest[] = [];
 
 
       if (session.session && uid) {
-        const [c, m, q, masterRow] = await Promise.all([
+        const [c, m, q, masterRow, p] = await Promise.all([
           db.from("platform_contracts").select("*"),
           db.from("platform_memberships").select("*"),
           db.from("platform_requests").select("*").order("created_at", { ascending: false }),
           db.from("user_roles").select("role").eq("user_id", uid).eq("role", "master").maybeSingle(),
+          db.from("pending_users").select("*").eq("status", "pending").order("created_at", { ascending: false }),
         ]);
         if (!masterRow.error && masterRow.data) {
           const originRes = await db
@@ -136,10 +149,53 @@ export async function reloadPlatformStore() {
           (c.data ?? []).forEach((r: any) => map.set(r.id, rowToContract(r)));
         }
         if (!m.error) {
-          users = (m.data ?? []).map((r: any) => ({
-            id: r.id, name: r.data?.name || r.data?.email || "Usuário", email: r.data?.email || "",
-            contractId: r.contract_id, roleLabel: r.data?.roleLabel || r.access_level, accessLevel: r.access_level,
-            authSource: "supabase", status: r.status, notes: r.data?.notes, createdAt: String(r.created_at).slice(0, 10),
+          users = (m.data ?? []).map((r: any) => {
+            const ctr = map.get(r.contract_id);
+            const emailLower = String(r.data?.email || "").toLowerCase();
+            const overrideModules =
+              ctr?.memberModuleOverrides?.[r.id] ??
+              (emailLower ? ctr?.memberModuleOverrides?.[emailLower] : undefined);
+            const allowedModules =
+              Array.isArray(r.data?.allowedModules) && r.data.allowedModules.length > 0
+                ? (r.data.allowedModules as ModuleId[])
+                : Array.isArray(overrideModules) && overrideModules.length > 0
+                ? overrideModules
+                : undefined;
+            const overrideLevels =
+              ctr?.memberModuleLevelOverrides?.[r.id] ??
+              (emailLower ? ctr?.memberModuleLevelOverrides?.[emailLower] : undefined);
+            const moduleLevels =
+              r.data?.moduleLevels && typeof r.data.moduleLevels === "object"
+                ? (r.data.moduleLevels as Partial<Record<ModuleId, string>>)
+                : overrideLevels;
+            return {
+              id: r.id,
+              name: r.data?.name || r.data?.email || "Usuário",
+              email: r.data?.email || "",
+              contractId: r.contract_id,
+              roleLabel: r.data?.roleLabel || r.access_level,
+              accessLevel: r.access_level,
+              authSource: "supabase" as const,
+              status: r.status,
+              allowedModules,
+              moduleLevels,
+              ebdAdmin: typeof r.data?.ebdAdmin === "boolean" ? r.data.ebdAdmin : r.access_level === "gestor_contrato",
+              notes: r.data?.notes,
+              createdAt: String(r.created_at).slice(0, 10),
+            };
+          });
+        }
+        if (!p.error) {
+          pendingRequests = (p.data ?? []).map((r: any) => ({
+            id: r.id,
+            userId: r.user_id ?? null,
+            email: r.email,
+            displayName: r.display_name || r.email,
+            contractId: r.contract_id ?? null,
+            requestedArea: r.requested_area ?? null,
+            notes: r.notes ?? null,
+            status: r.status,
+            createdAt: String(r.created_at).slice(0, 10),
           }));
         }
         if (!q.error) {
@@ -153,7 +209,7 @@ export async function reloadPlatformStore() {
       }
 
       const contracts = [...map.values()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
-      emit({ contracts, users, changeRequests, loading: false, error: null });
+      emit({ contracts, users, pendingRequests, changeRequests, loading: false, error: null });
     } catch (e: any) {
       console.error("[Plataforma] Falha ao carregar dados:", e);
       emit({ ...snapshot, loading: false, error: e?.message ?? "Falha ao carregar a plataforma" });
@@ -235,7 +291,12 @@ export function usePlatformStore() {
   };
   const updateContract = async (contractId: string, patch: Partial<PlatformContract>) => {
     await requireMaster();
-    if (patch.slug) patch = { ...patch, slug: validateContractSlug(patch.slug) };
+    if ("slug" in patch) {
+      patch = {
+        ...patch,
+        slug: patch.slug?.trim() ? validateContractSlug(patch.slug) : "",
+      };
+    }
     const current = getContractById(contractId);
     if (!current) throw new Error("Contrato não encontrado");
     check(await db.from("platform_contracts").update({ data: contractData({ ...current, ...patch }) }).eq("id", contractId));
@@ -248,6 +309,127 @@ export function usePlatformStore() {
   };
   const addUser = async (input: Omit<PlatformUser, "id" | "createdAt"> & { password: string }) => {
     await callUsers({ action: "create", ...input });
+    await done();
+    const needsFallbackModules = Boolean(input.allowedModules && input.allowedModules.length > 0);
+    const needsFallbackLevels = Boolean(input.moduleLevels && Object.keys(input.moduleLevels).length > 0);
+    if ((needsFallbackModules || needsFallbackLevels) && (await isCurrentUserSupabaseMaster())) {
+      const created = snapshot.users.find(
+        (u) => u.contractId === input.contractId && u.email.toLowerCase() === input.email.trim().toLowerCase()
+      );
+      const contract = getContractById(input.contractId);
+      if (created && contract) {
+        let dirty = false;
+        const nextContract = { ...contract };
+        if (needsFallbackModules && (!created.allowedModules || created.allowedModules.length === 0)) {
+          nextContract.memberModuleOverrides = {
+            ...(contract.memberModuleOverrides ?? {}),
+            [created.id]: input.allowedModules!,
+          };
+          dirty = true;
+        }
+        if (needsFallbackLevels && (!created.moduleLevels || Object.keys(created.moduleLevels).length === 0)) {
+          nextContract.memberModuleLevelOverrides = {
+            ...(contract.memberModuleLevelOverrides ?? {}),
+            [created.id]: input.moduleLevels!,
+          };
+          dirty = true;
+        }
+        if (dirty) {
+          await db
+            .from("platform_contracts")
+            .update({ data: contractData(nextContract) })
+            .eq("id", contract.id);
+          await done();
+        }
+      }
+    }
+    window.dispatchEvent(new Event(PLATFORM_ACCESS_EVENT));
+  };
+  const updateUserAccess = async (input: {
+    membershipId: string;
+    contractId: string;
+    email: string;
+    roleLabel: string;
+    accessLevel: UserAccessLevel;
+    allowedModules?: ModuleId[];
+    moduleLevels?: Partial<Record<ModuleId, string>>;
+    ebdAdmin?: boolean;
+  }) => {
+    let remoteOk = false;
+    try {
+      await callUsers({
+        action: "update_access",
+        membership_id: input.membershipId,
+        roleLabel: input.roleLabel,
+        accessLevel: input.accessLevel,
+        allowedModules: input.allowedModules && input.allowedModules.length > 0 ? input.allowedModules : null,
+        moduleLevels: input.moduleLevels ?? null,
+        ebdAdmin: input.ebdAdmin,
+      });
+      remoteOk = true;
+    } catch (err) {
+      const isMaster = await isCurrentUserSupabaseMaster();
+      if (!isMaster) throw err;
+    }
+
+    if (!remoteOk) {
+      const contract = getContractById(input.contractId);
+      if (!contract) throw new Error("Contrato não encontrado");
+      const nextOverrides = { ...(contract.memberModuleOverrides ?? {}) };
+      if (input.allowedModules && input.allowedModules.length > 0) {
+        nextOverrides[input.membershipId] = input.allowedModules;
+      } else {
+        delete nextOverrides[input.membershipId];
+        if (input.email) delete nextOverrides[input.email.toLowerCase()];
+      }
+      const nextLevelOverrides = { ...(contract.memberModuleLevelOverrides ?? {}) };
+      if (input.moduleLevels && Object.keys(input.moduleLevels).length > 0) {
+        nextLevelOverrides[input.membershipId] = input.moduleLevels;
+      } else {
+        delete nextLevelOverrides[input.membershipId];
+        if (input.email) delete nextLevelOverrides[input.email.toLowerCase()];
+      }
+      check(
+        await db
+          .from("platform_contracts")
+          .update({
+            data: contractData({
+              ...contract,
+              memberModuleOverrides: nextOverrides,
+              memberModuleLevelOverrides: nextLevelOverrides,
+            }),
+          })
+          .eq("id", contract.id)
+      );
+    }
+
+    await done();
+    window.dispatchEvent(new Event(PLATFORM_ACCESS_EVENT));
+  };
+  const approvePendingUser = async (input: {
+    pendingId: string;
+    contractId: string;
+    accessLevel: UserAccessLevel;
+    roleLabel: string;
+    allowedModules?: ModuleId[];
+    moduleLevels?: Partial<Record<ModuleId, string>>;
+    ebdAdmin?: boolean;
+  }) => {
+    await callUsers({
+      action: "approve_pending",
+      pending_id: input.pendingId,
+      contractId: input.contractId,
+      accessLevel: input.accessLevel,
+      roleLabel: input.roleLabel,
+      allowedModules: input.allowedModules && input.allowedModules.length > 0 ? input.allowedModules : null,
+      moduleLevels: input.moduleLevels ?? null,
+      ebdAdmin: input.ebdAdmin,
+    });
+    await done();
+    window.dispatchEvent(new Event(PLATFORM_ACCESS_EVENT));
+  };
+  const rejectPendingUser = async (pendingId: string) => {
+    await callUsers({ action: "reject_pending", pending_id: pendingId });
     await done();
   };
   const updateUserStatus = async (userId: string, status: PlatformUser["status"]) => {
@@ -316,7 +498,7 @@ export function usePlatformStore() {
   };
 
   return {
-    ...state, addContract, updateContract, deleteContract, addUser, updateUserStatus, deleteUser,
+    ...state, addContract, updateContract, deleteContract, addUser, updateUserAccess, updateUserStatus, deleteUser, approvePendingUser, rejectPendingUser,
     updateBranding: async (contractId: string, branding: PlatformContract["branding"]) => {
       await callUsers({ action: "branding", contractId, branding });
       await done();

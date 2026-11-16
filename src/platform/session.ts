@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PlatformUser } from "./types";
+import { ModuleId, PlatformUser, UserAccessLevel } from "./types";
 
 const SESSION_KEY = "gestao_viewer_session_v1";
 const SESSION_EVENT = "platform-session-updated";
@@ -13,6 +13,9 @@ export type ViewerSession =
       userEmail: string;
       contractId: string;
       roleLabel: string;
+      accessLevel?: UserAccessLevel;
+      allowedModules?: ModuleId[];
+      moduleLevels?: Partial<Record<ModuleId, string>>;
     };
 
 export function getViewerSession(): ViewerSession {
@@ -50,6 +53,9 @@ export function switchToClientSimulation(user: PlatformUser) {
     userEmail: user.email,
     contractId: user.contractId,
     roleLabel: user.roleLabel,
+    accessLevel: user.accessLevel,
+    allowedModules: user.allowedModules,
+    moduleLevels: user.moduleLevels,
   });
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { PlatformContract } from "./types";
+import type { ModuleId, PlatformContract, ProjectSegment } from "./types";
 
 export const DEFAULT_PUBLIC_APP_ORIGIN = "https://synapsys-group.lovable.app";
 export const PUBLIC_APP_ORIGIN = DEFAULT_PUBLIC_APP_ORIGIN;
@@ -211,8 +211,41 @@ export function validateContractSlug(value: string): string {
   return slug;
 }
 
+export const MODULE_ROUTE_SLUGS: Record<ModuleId, string> = {
+  igreja_ebd: "ebd",
+  igreja_tesouraria: "tesouraria",
+  igreja_secretaria: "secretaria",
+  comercio_tesouraria: "tesouraria",
+  comercio_secretaria: "secretaria",
+  comercio_estoque: "estoque",
+  comercio_rh: "rh",
+  comercio_pdv: "pdv",
+};
+
+export function moduleRouteSlug(moduleId: ModuleId): string {
+  return MODULE_ROUTE_SLUGS[moduleId];
+}
+
+export function resolveModuleFromSlug(segment: ProjectSegment, slug: string): ModuleId | null {
+  const clean = slug.trim().toLowerCase();
+  const prefix = segment === "comercio" ? "comercio_" : "igreja_";
+  for (const [modId, routeSlug] of Object.entries(MODULE_ROUTE_SLUGS)) {
+    if (modId.startsWith(prefix) && routeSlug === clean) {
+      return modId as ModuleId;
+    }
+  }
+  return null;
+}
+
 export function contractEntryPath(contract: Pick<PlatformContract, "id" | "slug">): string {
   return `/c/${contract.slug || contract.id}`;
+}
+
+export function contractModulePath(
+  contract: Pick<PlatformContract, "id" | "slug">,
+  moduleId: ModuleId
+): string {
+  return `${contractEntryPath(contract)}/${moduleRouteSlug(moduleId)}`;
 }
 
 export function contractPublicUrl(
@@ -222,6 +255,23 @@ export function contractPublicUrl(
 ): string {
   const origin = baseOrigin ? validatePublicAppOrigin(baseOrigin) : resolvePublicAppOrigin();
   return `${origin}${contractEntryPath(contract)}${login ? "/login" : ""}`;
+}
+
+export function contractModulePublicUrl(
+  contract: Pick<PlatformContract, "id" | "slug">,
+  moduleId: ModuleId,
+  baseOrigin?: string
+): string {
+  const origin = baseOrigin ? validatePublicAppOrigin(baseOrigin) : resolvePublicAppOrigin();
+  return `${origin}${contractModulePath(contract, moduleId)}`;
+}
+
+export function isModuleAllowed(
+  allowedModules: ModuleId[] | null | undefined,
+  moduleId: ModuleId
+): boolean {
+  if (!allowedModules || allowedModules.length === 0) return true;
+  return allowedModules.includes(moduleId);
 }
 
 export function shouldRequireEntryLogin(required: boolean | undefined, authenticated: boolean): boolean {

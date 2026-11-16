@@ -1,5 +1,5 @@
 import { ComponentType } from "react";
-import { ChangeRequest, PlatformContract, PlatformUser } from "@/platform/types";
+import { ChangeRequest, ModuleId, PlatformContract, PlatformUser } from "@/platform/types";
 import { CTR_001_CONFIG } from "./ctr-001-ebd-exemplo/contract.config";
 import { Ctr001Entry } from "./ctr-001-ebd-exemplo/ContractEntry";
 import { CTR_002_CONFIG } from "./ctr-002-igreja-modelo/contract.config";
@@ -19,7 +19,7 @@ export const INITIAL_CONTRACTS: PlatformContract[] = [
 
 export const CONTRACT_COMPONENTS: Record<
   string,
-  ComponentType<{ contract: PlatformContract }>
+  ComponentType<{ contract: PlatformContract; initialArea?: ModuleId }>
 > = {
   [CTR_001_CONFIG.id]: Ctr001Entry,
   [CTR_002_CONFIG.id]: Ctr002Entry,

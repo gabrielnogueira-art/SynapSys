@@ -11,7 +11,7 @@ import { ReportsTab } from "@/components/ReportsTab";
 import { ConfrontoTab } from "@/components/ConfrontoTab";
 import { HierarchyTab } from "@/components/HierarchyTab";
 import { ClassesManagement } from "@/components/ClassesManagement";
-import { RefreshCw } from "lucide-react";
+import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { SupabaseStatusBadge } from "@/components/SupabaseStatusBadge";
 import { SedeViewSwitcher } from "@/components/SedeViewSwitcher";
@@ -112,6 +112,11 @@ const Admin = () => {
             <p className="text-muted-foreground">Gerencie registros, alunos e relatórios</p>
           </div>
           <div className="flex gap-2">
+            {contractId && (
+              <Button onClick={() => navigate(resolve("/"))} variant="secondary">
+                <ArrowLeft className="h-4 w-4 mr-1.5" /> Portal EBD
+              </Button>
+            )}
             {!contractId && isMaster && (
               <Button onClick={() => navigate("/")} variant="secondary">
                 Plataforma

@@ -10,7 +10,7 @@ import { PlatformContract, ModuleId, ContractStatus } from "@/platform/types";
 import { getModulesBySegment } from "@/platform/catalog";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
-import { contractPublicUrl, usePlatformOrigin, validateContractSlug } from "@/platform/contractLinks";
+import { contractPublicUrl, normalizeContractSlug, usePlatformOrigin, validateContractSlug } from "@/platform/contractLinks";
 
 interface Props {
   contract: PlatformContract | null;
@@ -30,7 +30,7 @@ export const ContractModulesDialog = ({ contract, onClose, onSave, brandingOnly 
   const save = async () => {
     setSaving(true);
     try {
-      if (!brandingOnly && draft.slug) validateContractSlug(draft.slug);
+      if (!brandingOnly && draft.slug?.trim()) validateContractSlug(draft.slug);
       await onSave(contract.id, brandingOnly ? { branding: draft.branding } : draft);
       toast({ title: "Alterações salvas no Supabase" });
       onClose();
@@ -44,9 +44,20 @@ export const ContractModulesDialog = ({ contract, onClose, onSave, brandingOnly 
         {!brandingOnly && <>
           <Label htmlFor="contract-client">Nome do cliente</Label><Input id="contract-client" value={draft.clientName ?? ""} onChange={(e) => field("clientName", e.target.value)} />
           <div className="space-y-1">
-            <Label htmlFor="contract-slug">Link amigável do cliente</Label>
-            <Input id="contract-slug" placeholder={contract.id} value={draft.slug ?? ""} maxLength={80} onChange={(e) => field("slug", e.target.value.toLowerCase())} />
-            <p className="text-xs text-muted-foreground break-all">{contractPublicUrl({ id: contract.id, slug: draft.slug }, false, platformOrigin)}</p>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="contract-slug">Link amigável do cliente</Label>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs"
+                onClick={() => field("slug", normalizeContractSlug(draft.clientName || contract.clientName))}
+              >
+                Sugerir pelo nome
+              </Button>
+            </div>
+            <Input id="contract-slug" placeholder={contract.id} value={draft.slug ?? ""} maxLength={80} onChange={(e) => field("slug", e.target.value.toLowerCase().replace(/\s+/g, "-"))} />
+            <p className="text-xs text-muted-foreground break-all">{contractPublicUrl({ id: contract.id, slug: draft.slug?.trim() || undefined }, false, platformOrigin)}</p>
           </div>
           <div className="flex items-center justify-between gap-3"><Label htmlFor="contract-login-first">Exigir login na entrada</Label><Switch id="contract-login-first" checked={draft.requireLoginOnEntry ?? false} onCheckedChange={(value) => field("requireLoginOnEntry", value)} /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

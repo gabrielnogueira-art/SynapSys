@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Eye, FolderGit2, Layers } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Eye, FolderGit2, Layers, Users } from "lucide-react";
 import { ModuleId, PlatformContract } from "@/platform/types";
 import { buildAntigravityEditPrompt, getModuleById, SEGMENT_DEFINITIONS } from "@/platform/catalog";
 import { useToast } from "@/hooks/use-toast";
@@ -188,6 +188,16 @@ export const ContractBanner = ({
               </>
             )}
           </Button>
+
+          <Link to={`${contract.entryPath}/users`}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2.5 text-xs bg-transparent border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white"
+            >
+              <Users className="h-3.5 w-3.5 mr-1" /> Logins
+            </Button>
+          </Link>
 
           <ContractLinkMenu contract={contract} />
           <Button

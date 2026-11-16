@@ -61,7 +61,7 @@ export const NewContractDialog = ({
   const [clientName, setClientName] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
-  const [requireLoginOnEntry, setRequireLoginOnEntry] = useState(false);
+  const [requireLoginOnEntry, setRequireLoginOnEntry] = useState(true);
   const [segment, setSegment] = useState<ProjectSegment>("igreja");
   const [status, setStatus] = useState<ContractStatus>("ativo");
   const [city, setCity] = useState("");
@@ -117,7 +117,7 @@ export const NewContractDialog = ({
     setClientName("");
     setSlug("");
     setSlugEdited(false);
-    setRequireLoginOnEntry(false);
+    setRequireLoginOnEntry(true);
     setCity("");
     setResponsibleName("");
     setResponsibleEmail("");

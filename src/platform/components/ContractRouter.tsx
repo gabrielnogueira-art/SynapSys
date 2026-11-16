@@ -12,13 +12,15 @@ import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import Admin from "@/pages/Admin";
 import Professor from "@/pages/Professor";
-import { PlatformContract } from "@/platform/types";
+import { ModuleId, PlatformContract } from "@/platform/types";
 import { useContractAccess } from "@/platform/useContractAccess";
 import { useUserRole } from "@/hooks/useUserRole";
 import { PlatformUsersTab } from "./PlatformUsersTab";
 import { ContractModulesDialog } from "./ContractModulesDialog";
-import { canAccessContract, useViewerSession } from "@/platform/session";
-import { shouldRequireEntryLogin } from "@/platform/contractLinks";
+import { canAccessContract, switchToOwnerMode, useViewerSession } from "@/platform/session";
+import { getModuleById } from "@/platform/catalog";
+import { isModuleAllowed, moduleRouteSlug, shouldRequireEntryLogin } from "@/platform/contractLinks";
+import { supabase } from "@/integrations/supabase/client";
 
 function WithBanner({
   contract,
@@ -37,7 +39,8 @@ function WithBanner({
 
 /**
  * Roteador isolado por contrato (/c/:contractId/*).
- * Bloqueia acesso cruzado quando o usuário logado pertence a outro contrato.
+ * Suporta entrada geral (/c/:slug), rotas por módulo (/c/:slug/ebd, /tesouraria, /secretaria, ...)
+ * e restrição automática por usuário/módulo.
  */
 export const ContractRouter = () => {
   const { contractId } = useParams<{ contractId: string }>();
@@ -52,6 +55,7 @@ export const ContractRouter = () => {
   if (loading) return <div className="p-8 text-muted-foreground">Carregando contrato…</div>;
   if (error) return <div className="p-8" role="alert">{error}</div>;
   const isAuthRoute = /\/(login|signup)\/?$/.test(location.pathname);
+
   if (!contract) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
@@ -132,12 +136,109 @@ export const ContractRouter = () => {
     );
   }
 
+  const effectiveAllowed =
+    session.mode === "client"
+      ? session.allowedModules && session.allowedModules.length > 0
+        ? session.allowedModules
+        : null
+      : role.role === "master"
+      ? null
+      : access.allowedModules;
+
+  const loginRedirectPath = `${contract.entryPath}/login?next=${encodeURIComponent(
+    `${location.pathname}${location.search}`
+  )}`;
+
+  const unauthorizedContractCard = (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+      <Card className="max-w-md w-full border-destructive/40">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-destructive">
+            <ShieldAlert className="h-5 w-5" /> Acesso Restrito ao Contrato
+          </CardTitle>
+          <CardDescription>
+            Sua conta conectada ({access.userEmail || "usuário"}) não está vinculada a {contract.clientName}.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex gap-2">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              switchToOwnerMode();
+              window.location.assign(`${contract.entryPath}/login`);
+            }}
+          >
+            Trocar de conta
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const restrictedModuleCard = (modId: ModuleId) => (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+      <Card className="max-w-md w-full border-destructive/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-destructive">
+            <ShieldAlert className="h-5 w-5" /> Área não liberada
+          </CardTitle>
+          <CardDescription>
+            Sua conta não tem permissão para acessar{" "}
+            <strong>{getModuleById(modId)?.name ?? modId}</strong> neste contrato.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link to={contract.entryPath}>
+            <Button className="w-full">
+              <ArrowLeft className="h-4 w-4 mr-2" /> Voltar às minhas áreas
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   const EntryComponent = CONTRACT_COMPONENTS[contract.id] ?? GenericContractEntry;
-  const entry = access.loading || role.loading ? (
-    <div className="p-8 text-muted-foreground">Verificando acesso…</div>
-  ) : shouldRequireEntryLogin(contract.requireLoginOnEntry, access.signedIn) ? (
-    <Navigate to={`${contract.entryPath}/login`} replace />
-  ) : <EntryComponent contract={contract} />;
+
+  const renderEntry = (initialArea?: ModuleId) => {
+    if (access.loading || role.loading) {
+      return <div className="p-8 text-muted-foreground">Verificando acesso…</div>;
+    }
+    if (shouldRequireEntryLogin(contract.requireLoginOnEntry, access.signedIn)) {
+      return <Navigate to={loginRedirectPath} replace />;
+    }
+    if (access.signedIn && !access.allowed && role.role !== "master" && session.mode === "owner") {
+      return unauthorizedContractCard;
+    }
+    if (initialArea && !isModuleAllowed(effectiveAllowed, initialArea)) {
+      return restrictedModuleCard(initialArea);
+    }
+    return <EntryComponent contract={contract} initialArea={initialArea} />;
+  };
+
+  const guardEbdSubroute = (element: React.ReactNode, requireAuthAlways = false) => {
+    if (access.loading || role.loading) {
+      return <div className="p-8 text-muted-foreground">Verificando acesso…</div>;
+    }
+    if (
+      (requireAuthAlways && !access.signedIn) ||
+      shouldRequireEntryLogin(contract.requireLoginOnEntry, access.signedIn)
+    ) {
+      return <Navigate to={loginRedirectPath} replace />;
+    }
+    if (access.signedIn && !access.allowed && role.role !== "master" && session.mode === "owner") {
+      return unauthorizedContractCard;
+    }
+    if (!contract.activeModules.includes("igreja_ebd")) {
+      return restrictedModuleCard("igreja_ebd");
+    }
+    if ((access.signedIn || session.mode === "client") && !isModuleAllowed(effectiveAllowed, "igreja_ebd")) {
+      return restrictedModuleCard("igreja_ebd");
+    }
+    return <WithBanner contract={contract}>{element}</WithBanner>;
+  };
 
   return (
     <Routes>
@@ -152,8 +253,12 @@ export const ContractRouter = () => {
                 <PlatformUsersTab
                   contracts={[contract]}
                   users={store.users.filter((u) => u.contractId === contract.id)}
+                  pendingRequests={store.pendingRequests}
                   isMaster={role.role === "master"}
                   onAddUser={store.addUser}
+                  onUpdateAccess={store.updateUserAccess}
+                  onApprovePending={store.approvePendingUser}
+                  onRejectPending={store.rejectPendingUser}
                   onUpdateStatus={store.updateUserStatus}
                   onDeleteUser={store.deleteUser}
                 />
@@ -190,23 +295,16 @@ export const ContractRouter = () => {
           )
         }
       />
-      <Route index element={entry} />
-      <Route
-        path="form"
-        element={
-          <WithBanner contract={contract}>
-            <EBDRegistrationForm />
-          </WithBanner>
-        }
-      />
-      <Route
-        path="coristas"
-        element={
-          <WithBanner contract={contract}>
-            <ChoirView />
-          </WithBanner>
-        }
-      />
+      <Route index element={renderEntry()} />
+      {contract.activeModules.map((modId) => (
+        <Route
+          key={modId}
+          path={moduleRouteSlug(modId)}
+          element={renderEntry(modId)}
+        />
+      ))}
+      <Route path="form" element={guardEbdSubroute(<EBDRegistrationForm />)} />
+      <Route path="coristas" element={guardEbdSubroute(<ChoirView />)} />
       <Route
         path="login"
         element={
@@ -223,23 +321,9 @@ export const ContractRouter = () => {
           </WithBanner>
         }
       />
-      <Route
-        path="admin"
-        element={
-          <WithBanner contract={contract}>
-            <Admin />
-          </WithBanner>
-        }
-      />
-      <Route
-        path="professor"
-        element={
-          <WithBanner contract={contract}>
-            <Professor />
-          </WithBanner>
-        }
-      />
-      <Route path="*" element={entry} />
+      <Route path="admin" element={guardEbdSubroute(<Admin />, true)} />
+      <Route path="professor" element={guardEbdSubroute(<Professor />, true)} />
+      <Route path="*" element={renderEntry()} />
     </Routes>
   );
 };

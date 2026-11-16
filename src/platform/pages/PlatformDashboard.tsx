@@ -47,6 +47,7 @@ import { ContractStatus, PlatformContract, ProjectSegment } from "@/platform/typ
 import { NewContractDialog } from "@/platform/components/NewContractDialog";
 import { ContractModulesDialog } from "@/platform/components/ContractModulesDialog";
 import { ContractLinkMenu } from "@/platform/components/ContractLinkMenu";
+import { ContractLinkDialog } from "@/platform/components/ContractLinkDialog";
 import { PlatformOriginDialog } from "@/platform/components/PlatformOriginDialog";
 import { contractPublicUrl, usePlatformOrigin } from "@/platform/contractLinks";
 import { PlatformUsersTab } from "@/platform/components/PlatformUsersTab";
@@ -89,6 +90,7 @@ export const PlatformDashboard = () => {
 
   const [newContractOpen, setNewContractOpen] = useState(false);
   const [editingContract, setEditingContract] = useState<PlatformContract | null>(null);
+  const [editingLinkContract, setEditingLinkContract] = useState<PlatformContract | null>(null);
   const [preselectedReqContract, setPreselectedReqContract] = useState<string | undefined>();
   const [copiedContractId, setCopiedContractId] = useState<string | null>(null);
   const [authState, setAuthState] = useState<{
@@ -206,11 +208,6 @@ export const PlatformDashboard = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Link to="/ebd">
-              <Button variant="outline" size="sm">
-                <LogIn className="h-4 w-4 mr-1.5" /> Portal Público (EBD)
-              </Button>
-            </Link>
             {role.role === "master" && <Button variant="outline" size="sm" onClick={() => setAccountOpen(true)}><Settings2 className="h-4 w-4 mr-1.5" /> Meu acesso</Button>}
             {role.role === "master" ? (
               <Button
@@ -521,8 +518,26 @@ export const PlatformDashboard = () => {
                       )}
 
                       <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground break-all">{contractPublicUrl(contract, false, originInfo.origin)}</p>
-                        <ContractLinkMenu contract={contract} />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-xs text-muted-foreground break-all">
+                            {contractPublicUrl(contract, false, originInfo.origin)}
+                          </p>
+                          <Badge variant={contract.requireLoginOnEntry ? "secondary" : "outline"} className="text-[10px]">
+                            {contract.requireLoginOnEntry ? "Login na entrada" : "Acesso direto"}
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <ContractLinkMenu contract={contract} />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditingLinkContract(contract)}
+                          >
+                            <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                            Editar link
+                          </Button>
+                        </div>
                       </div>
 
                       {/* Ações */}
@@ -561,6 +576,14 @@ export const PlatformDashboard = () => {
 
                         <Button
                           variant="outline"
+                          onClick={() => navigate(`${contract.entryPath}/users`)}
+                          title="Gerenciar logins e solicitações deste contrato"
+                        >
+                          <Users className="h-4 w-4 mr-1.5" /> Logins
+                        </Button>
+
+                        <Button
+                          variant="outline"
                           onClick={() => setEditingContract(contract)}
                           title="Configurar módulos e dados do contrato"
                         >
@@ -587,7 +610,11 @@ export const PlatformDashboard = () => {
             <PlatformUsersTab
               contracts={store.contracts}
               users={store.users}
+              pendingRequests={store.pendingRequests}
               onAddUser={store.addUser}
+              onUpdateAccess={store.updateUserAccess}
+              onApprovePending={store.approvePendingUser}
+              onRejectPending={store.rejectPendingUser}
               onUpdateStatus={store.updateUserStatus}
               onDeleteUser={store.deleteUser}
             />
@@ -632,6 +659,14 @@ export const PlatformDashboard = () => {
         onSave={async (id, patch) => {
           await store.updateContract(id, patch);
           toast({ title: "Contrato atualizado com sucesso" });
+        }}
+      />
+
+      <ContractLinkDialog
+        contract={editingLinkContract}
+        onClose={() => setEditingLinkContract(null)}
+        onSave={async (id, patch) => {
+          await store.updateContract(id, patch);
         }}
       />
 

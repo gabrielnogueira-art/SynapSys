@@ -11,11 +11,12 @@ import { ProfessorStudentsTab } from "@/components/ProfessorStudentsTab";
 import { ProfessorDashboardTab } from "@/components/ProfessorDashboardTab";
 import { ProfessorSidebar, ProfessorSection } from "@/components/ProfessorSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { ArrowLeft } from "lucide-react";
 import { useContractBasePath } from "@/platform/useContractBasePath";
 
 const Professor = () => {
   const navigate = useNavigate();
-  const { resolve } = useContractBasePath();
+  const { resolve, isInsideContract } = useContractBasePath();
   const { role, loading } = useUserRole();
   const [checking, setChecking] = useState(true);
   const [classId, setClassId] = useState<number | null>(null);
@@ -90,6 +91,11 @@ const Professor = () => {
                   ))}
                 </SelectContent>
               </Select>
+            )}
+            {isInsideContract && (
+              <Button variant="secondary" size="sm" onClick={() => navigate(resolve("/"))}>
+                <ArrowLeft className="h-4 w-4 mr-1" /> Portal EBD
+              </Button>
             )}
             <Button variant="outline" size="sm" onClick={handleLogout}>Sair</Button>
           </header>
