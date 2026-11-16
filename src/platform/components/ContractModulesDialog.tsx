@@ -10,7 +10,7 @@ import { PlatformContract, ModuleId, ContractStatus } from "@/platform/types";
 import { getModulesBySegment } from "@/platform/catalog";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
-import { contractPublicUrl, validateContractSlug } from "@/platform/contractLinks";
+import { contractPublicUrl, usePlatformOrigin, validateContractSlug } from "@/platform/contractLinks";
 
 interface Props {
   contract: PlatformContract | null;
@@ -20,6 +20,7 @@ interface Props {
 }
 export const ContractModulesDialog = ({ contract, onClose, onSave, brandingOnly = false }: Props) => {
   const { toast } = useToast();
+  const { origin: platformOrigin } = usePlatformOrigin();
   const [draft, setDraft] = useState<Partial<PlatformContract>>({});
   const [saving, setSaving] = useState(false);
   useEffect(() => { if (contract) setDraft({ ...contract }); }, [contract]);
@@ -45,7 +46,7 @@ export const ContractModulesDialog = ({ contract, onClose, onSave, brandingOnly 
           <div className="space-y-1">
             <Label htmlFor="contract-slug">Link amigável do cliente</Label>
             <Input id="contract-slug" placeholder={contract.id} value={draft.slug ?? ""} maxLength={80} onChange={(e) => field("slug", e.target.value.toLowerCase())} />
-            <p className="text-xs text-muted-foreground break-all">{contractPublicUrl({ id: contract.id, slug: draft.slug })}</p>
+            <p className="text-xs text-muted-foreground break-all">{contractPublicUrl({ id: contract.id, slug: draft.slug }, false, platformOrigin)}</p>
           </div>
           <div className="flex items-center justify-between gap-3"><Label htmlFor="contract-login-first">Exigir login na entrada</Label><Switch id="contract-login-first" checked={draft.requireLoginOnEntry ?? false} onCheckedChange={(value) => field("requireLoginOnEntry", value)} /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

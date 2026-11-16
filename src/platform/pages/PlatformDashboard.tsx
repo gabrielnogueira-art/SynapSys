@@ -21,10 +21,12 @@ import {
   Eye,
   FileEdit,
   FolderGit2,
+  Globe,
   LayoutGrid,
   LogIn,
   LogOut,
   MessageSquarePlus,
+  Pencil,
   Plus,
   Search,
   Settings2,
@@ -45,7 +47,8 @@ import { ContractStatus, PlatformContract, ProjectSegment } from "@/platform/typ
 import { NewContractDialog } from "@/platform/components/NewContractDialog";
 import { ContractModulesDialog } from "@/platform/components/ContractModulesDialog";
 import { ContractLinkMenu } from "@/platform/components/ContractLinkMenu";
-import { contractPublicUrl } from "@/platform/contractLinks";
+import { PlatformOriginDialog } from "@/platform/components/PlatformOriginDialog";
+import { contractPublicUrl, usePlatformOrigin } from "@/platform/contractLinks";
 import { PlatformUsersTab } from "@/platform/components/PlatformUsersTab";
 import { PlatformRequestsTab } from "@/platform/components/PlatformRequestsTab";
 import { PlatformCatalogTab } from "@/platform/components/PlatformCatalogTab";
@@ -75,8 +78,10 @@ export const PlatformDashboard = () => {
   const store = usePlatformStore();
   const session = useViewerSession();
   const role = useUserRole();
+  const originInfo = usePlatformOrigin();
 
   const [accountOpen, setAccountOpen] = useState(false);
+  const [originDialogOpen, setOriginDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("contracts");
   const [search, setSearch] = useState("");
   const [segmentFilter, setSegmentFilter] = useState<"all" | ProjectSegment>("all");
@@ -365,6 +370,31 @@ export const PlatformDashboard = () => {
               </div>
             </div>
 
+            <div className="rounded-lg border border-border bg-card px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                <Globe className="h-4 w-4 text-primary shrink-0" />
+                <span className="text-xs font-medium text-muted-foreground">Link base dos clientes:</span>
+                <code className="text-xs font-mono text-foreground break-all">{originInfo.origin}</code>
+                <Badge variant={originInfo.mode === "manual" ? "secondary" : "outline"} className="text-[11px]">
+                  {originInfo.mode === "manual" ? "Manual" : "Automático"}
+                </Badge>
+                {originInfo.mode === "auto" && originInfo.isEphemeralBrowser && originInfo.browserOrigin && (
+                  <span className="text-[11px] text-muted-foreground">
+                    (preview/local em {originInfo.browserOrigin} — usando padrão público)
+                  </span>
+                )}
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs shrink-0"
+                onClick={() => setOriginDialogOpen(true)}
+              >
+                <Pencil className="h-3.5 w-3.5 mr-1.5" /> Alterar link base
+              </Button>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {filteredContracts.map((contract) => {
                 const seg = SEGMENT_DEFINITIONS[contract.segment];
@@ -491,7 +521,7 @@ export const PlatformDashboard = () => {
                       )}
 
                       <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground break-all">{contractPublicUrl(contract)}</p>
+                        <p className="text-xs text-muted-foreground break-all">{contractPublicUrl(contract, false, originInfo.origin)}</p>
                         <ContractLinkMenu contract={contract} />
                       </div>
 
@@ -606,6 +636,12 @@ export const PlatformDashboard = () => {
       />
 
       <AccountAccessDialog open={accountOpen} onOpenChange={setAccountOpen} email={authState.email ?? ""} />
+      <PlatformOriginDialog
+        open={originDialogOpen}
+        onOpenChange={setOriginDialogOpen}
+        sampleEntryPath={store.contracts[0]?.entryPath}
+        onSave={store.updatePlatformOrigin}
+      />
       <SupabaseStatusBadge />
     </div>
   );

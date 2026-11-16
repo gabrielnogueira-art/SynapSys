@@ -13,7 +13,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { contractPublicUrl, normalizeContractSlug, validateContractSlug } from "@/platform/contractLinks";
+import {
+  contractPublicUrl,
+  normalizeContractSlug,
+  usePlatformOrigin,
+  validateContractSlug,
+} from "@/platform/contractLinks";
 import {
   Select,
   SelectContent,
@@ -51,6 +56,7 @@ export const NewContractDialog = ({
   onCreate,
 }: NewContractDialogProps) => {
   const { toast } = useToast();
+  const { origin: platformOrigin } = usePlatformOrigin();
   const [saving, setSaving] = useState(false);
   const [clientName, setClientName] = useState("");
   const [slug, setSlug] = useState("");
@@ -187,7 +193,7 @@ export const NewContractDialog = ({
             <div className="space-y-1 sm:col-span-2">
               <Label htmlFor="new-contract-slug">Link amigável do cliente *</Label>
               <Input id="new-contract-slug" placeholder="adcampos" value={slug} maxLength={80} required onChange={(e) => { setSlugEdited(true); setSlug(e.target.value.toLowerCase()); }} />
-              <p className="text-xs text-muted-foreground break-all">{contractPublicUrl({ id: folderSlug, slug })}</p>
+              <p className="text-xs text-muted-foreground break-all">{contractPublicUrl({ id: folderSlug, slug }, false, platformOrigin)}</p>
             </div>
             <div className="flex items-center justify-between gap-3 sm:col-span-2">
               <Label htmlFor="new-contract-login">Exigir login na entrada</Label>

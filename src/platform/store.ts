@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ChangeRequest, ContractStatus, ModuleId, PlatformContract, PlatformUser, ProjectSegment } from "./types";
 import { slugifyContractFolder } from "./catalog";
-import { contractEntryPath, normalizeContractSlug, validateContractSlug } from "./contractLinks";
+import {
+  contractEntryPath,
+  normalizeContractSlug,
+  normalizeOriginConfig,
+  type PlatformOriginConfig,
+  setPlatformOriginConfig,
+  validateContractSlug,
+  validatePublicAppOrigin,
+} from "./contractLinks";
 
 const db = supabase as any;
 const LEGACY_KEY = "gestao_plataforma_hub_v1";
@@ -108,11 +116,22 @@ export async function reloadPlatformStore() {
 
 
       if (session.session && uid) {
-        const [c, m, q] = await Promise.all([
+        const [c, m, q, masterRow] = await Promise.all([
           db.from("platform_contracts").select("*"),
           db.from("platform_memberships").select("*"),
           db.from("platform_requests").select("*").order("created_at", { ascending: false }),
+          db.from("user_roles").select("role").eq("user_id", uid).eq("role", "master").maybeSingle(),
         ]);
+        if (!masterRow.error && masterRow.data) {
+          const originRes = await db
+            .from("system_settings")
+            .select("value")
+            .eq("key", "platform_public_origin")
+            .maybeSingle();
+          if (!originRes.error && originRes.data?.value) {
+            setPlatformOriginConfig(normalizeOriginConfig(originRes.data.value));
+          }
+        }
         if (!c.error) {
           (c.data ?? []).forEach((r: any) => map.set(r.id, rowToContract(r)));
         }
@@ -261,6 +280,24 @@ export function usePlatformStore() {
     check(await db.from("platform_requests").delete().eq("id", requestId));
     await done();
   };
+  const updatePlatformOrigin = async (next: PlatformOriginConfig) => {
+    await requireMaster();
+    const normalized: PlatformOriginConfig =
+      next.mode === "manual"
+        ? { mode: "manual", manualOrigin: validatePublicAppOrigin(next.manualOrigin ?? "") }
+        : { mode: "auto", manualOrigin: null };
+    check(
+      await db.from("system_settings").upsert(
+        {
+          key: "platform_public_origin",
+          value: normalized,
+          description: "Domínio base usado para gerar links públicos de contratos",
+        },
+        { onConflict: "key" }
+      )
+    );
+    setPlatformOriginConfig(normalized);
+  };
 
   /** Importa contratos/solicitações antigos salvos apenas neste navegador. Não cria logins. */
   const importLegacyBrowserData = async () => {
@@ -284,7 +321,7 @@ export function usePlatformStore() {
       await callUsers({ action: "branding", contractId, branding });
       await done();
     },
-    addChangeRequest, updateChangeRequestStatus, deleteChangeRequest, importLegacyBrowserData, reload: reloadPlatformStore,
+    addChangeRequest, updateChangeRequestStatus, deleteChangeRequest, updatePlatformOrigin, importLegacyBrowserData, reload: reloadPlatformStore,
     toggleContractModule: async (contractId: string, moduleId: ModuleId) => {
       const c = getContractById(contractId);
       if (!c) return;

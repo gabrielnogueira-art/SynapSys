@@ -2,17 +2,19 @@ import { Link2, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { contractPublicUrl } from "../contractLinks";
+import { contractPublicUrl, usePlatformOrigin } from "../contractLinks";
 import type { PlatformContract } from "../types";
 
 export function ContractLinkMenu({ contract }: { contract: PlatformContract }) {
   const { toast } = useToast();
+  const { origin } = usePlatformOrigin();
   const copy = async (login: boolean) => {
+    const url = contractPublicUrl(contract, login, origin);
     try {
-      await navigator.clipboard.writeText(contractPublicUrl(contract, login));
+      await navigator.clipboard.writeText(url);
       toast({ title: login ? "Link do login copiado" : "Link do cliente copiado" });
     } catch {
-      toast({ variant: "destructive", title: "Não foi possível copiar", description: contractPublicUrl(contract, login) });
+      toast({ variant: "destructive", title: "Não foi possível copiar", description: url });
     }
   };
   return <DropdownMenu>
