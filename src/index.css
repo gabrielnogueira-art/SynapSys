@@ -147,7 +147,8 @@ All colors MUST be HSL.
   --success-bg: 158 35% 16%;
   --success-foreground: 158 64% 72%;
   --radius: 0.5rem;
-  --gradient-primary: linear-gradient(120deg, hsl(224 71% 40%), hsl(189 94% 43%), hsl(262 83% 58%));
+  --gradient-primary: linear-gradient(hsl(var(--primary)), hsl(var(--primary)));
+  --gradient-secondary: linear-gradient(hsl(var(--muted)), hsl(var(--muted)));
   --shadow-card: 0 4px 20px -4px hsl(222 47% 4% / 0.25);
   --shadow-primary: 0 6px 24px -8px hsl(189 94% 43% / 0.25);
 }

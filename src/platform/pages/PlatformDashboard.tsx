@@ -496,7 +496,7 @@ export const PlatformDashboard = () => {
                           className="flex-1 min-w-[160px]"
                           onClick={() => navigate(contract.entryPath)}
                         >
-                          Acessar (Empreendedor)
+                          Abrir sistema
                           <ArrowRight className="h-4 w-4 ml-1.5" />
                         </Button>
 
