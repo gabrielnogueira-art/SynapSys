@@ -31,8 +31,9 @@ export const ContractBanner = ({
   const [collapsed, setCollapsed] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Nunca exibir para usuários finais de contrato
-  if (session.mode !== "owner" || role.role !== "master") {
+  // Nunca exibir para usuários finais autenticados em contratos ou durante simulação de cliente
+  const isClientAccountSignedIn = Boolean(role.role && role.role !== "master");
+  if (session.mode !== "owner" || isClientAccountSignedIn) {
     return null;
   }
 

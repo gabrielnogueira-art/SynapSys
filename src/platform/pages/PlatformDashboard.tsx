@@ -23,15 +23,17 @@ import {
   FolderGit2,
   LayoutGrid,
   LogIn,
+  LogOut,
   MessageSquarePlus,
   Plus,
-  RotateCcw,
   Search,
   Settings2,
+  ShieldAlert,
   Store,
   Trash2,
   Users,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
 import { hasLegacyPlatformData, usePlatformStore } from "@/platform/store";
 import {
@@ -47,7 +49,11 @@ import { PlatformRequestsTab } from "@/platform/components/PlatformRequestsTab";
 import { PlatformCatalogTab } from "@/platform/components/PlatformCatalogTab";
 import { useToast } from "@/hooks/use-toast";
 import { SupabaseStatusBadge } from "@/components/SupabaseStatusBadge";
-import { switchToClientSimulation, useViewerSession } from "@/platform/session";
+import {
+  switchToClientSimulation,
+  switchToOwnerMode,
+  useViewerSession,
+} from "@/platform/session";
 
 const STATUS_BADGE: Record<
   ContractStatus,
@@ -75,12 +81,48 @@ export const PlatformDashboard = () => {
   const [editingContract, setEditingContract] = useState<PlatformContract | null>(null);
   const [preselectedReqContract, setPreselectedReqContract] = useState<string | undefined>();
   const [copiedContractId, setCopiedContractId] = useState<string | null>(null);
+  const [authState, setAuthState] = useState<{
+    loading: boolean;
+    email: string | null;
+    ownContractId: string | null;
+  }>({ loading: true, email: null, ownContractId: null });
 
   useEffect(() => {
-    if (session.mode === "client") {
-      navigate(`/c/${session.contractId}`, { replace: true });
+    let active = true;
+    const syncAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      const user = data.session?.user;
+      let ownContractId: string | null = null;
+      if (user) {
+        const { data: memberships } = await supabase
+          .from("platform_memberships")
+          .select("contract_id")
+          .eq("user_id", user.id)
+          .eq("status", "ativo")
+          .limit(1);
+        ownContractId = memberships?.[0]?.contract_id ?? null;
+      }
+      if (active) {
+        setAuthState({ loading: false, email: user?.email ?? null, ownContractId });
+      }
+    };
+    syncAuth();
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      syncAuth();
+    });
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  // Ao acessar diretamente a raiz da Plataforma (acesso livre ou sessão Master),
+  // encerra eventual modo simulação para nunca prender o empreendedor dentro de um contrato cliente (ex.: EBD).
+  useEffect(() => {
+    if (!role.loading && (!role.role || role.role === "master") && session.mode === "client") {
+      switchToOwnerMode();
     }
-  }, [session, navigate]);
+  }, [role.loading, role.role, session.mode]);
 
   const nextCodePreview = useMemo(() => {
     const nextNum =
@@ -135,13 +177,11 @@ export const PlatformDashboard = () => {
     setActiveTab("requests");
   };
 
-  if (role.loading || store.loading) return <div className="p-8 text-muted-foreground">Carregando plataforma…</div>;
-  if (role.role !== "master") return <Navigate to="/login?next=/plataforma" replace />;
-  if (store.error) return <div className="p-8 space-y-4"><p role="alert">{store.error}</p><Button onClick={() => store.reload()}>Tentar novamente</Button></div>;
-
-  if (session.mode === "client") {
-    return <Navigate to={`/c/${session.contractId}`} replace />;
+  if (role.loading || store.loading) {
+    return <div className="p-8 text-muted-foreground">Carregando plataforma…</div>;
   }
+
+  if (store.error) return <div className="p-8 space-y-4"><p role="alert">{store.error}</p><Button onClick={() => store.reload()}>Tentar novamente</Button></div>;
 
   return (
     <div className="min-h-screen bg-slate-50/80 text-slate-900">
@@ -160,20 +200,44 @@ export const PlatformDashboard = () => {
                 <Badge variant="outline" className="text-[11px] bg-slate-100">
                   Multi-Contratos
                 </Badge>
+                {role.role === "master" && (
+                  <Badge className="text-[11px] bg-emerald-600 hover:bg-emerald-600 text-white">
+                    Master Supabase
+                  </Badge>
+                )}
               </div>
               <p className="text-xs text-muted-foreground">
-                Painel do Empreendedor • Contratos vigentes, usuários e projetos isolados por segmento
+                Painel do Empreendedor ({authState.email ? authState.email : "Acesso Direto Local"}) • Contratos vigentes, usuários e projetos isolados por segmento
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Link to="/login">
+            <Link to="/ebd">
               <Button variant="outline" size="sm">
-                <LogIn className="h-4 w-4 mr-1.5" /> Login Direto (EBD)
+                <LogIn className="h-4 w-4 mr-1.5" /> Portal Público (EBD)
               </Button>
             </Link>
-            {hasLegacyPlatformData() && <Button size="sm" variant="outline" onClick={async () => {
+            {role.role === "master" ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  switchToOwnerMode();
+                  await supabase.auth.signOut();
+                }}
+                title="Encerrar sessão Master (mantém acesso direto à plataforma)"
+              >
+                <LogOut className="h-4 w-4 mr-1.5" /> Sair
+              </Button>
+            ) : (
+              <Link to="/login?next=/plataforma">
+                <Button variant="outline" size="sm" title="Autenticar conta Master do Supabase para gerenciar logins reais">
+                  <LogIn className="h-4 w-4 mr-1.5" /> Conectar Master (Supabase)
+                </Button>
+              </Link>
+            )}
+            {role.role === "master" && hasLegacyPlatformData() && <Button size="sm" variant="outline" onClick={async () => {
               try {
                 const count = await store.importLegacyBrowserData();
                 toast({ title: `${count} contrato(s) importado(s)`, description: "Contas antigas de demonstração não foram transformadas em logins." });

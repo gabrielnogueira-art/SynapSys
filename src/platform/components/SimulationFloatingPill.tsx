@@ -7,11 +7,15 @@ import { switchToOwnerMode, useViewerSession } from "@/platform/session";
  * Pill flutuante exibida SOMENTE no modo simulador local quando você está
  * testando a visão restrita de um cliente final, para poder retornar ao Modo Empreendedor.
  */
+import { useUserRole } from "@/hooks/useUserRole";
+
 export const SimulationFloatingPill = () => {
   const session = useViewerSession();
+  const role = useUserRole();
   const navigate = useNavigate();
 
-  if (session.mode !== "client") return null;
+  const isClientAccountSignedIn = Boolean(role.role && role.role !== "master");
+  if (session.mode !== "client" || isClientAccountSignedIn) return null;
 
   return (
     <div className="fixed bottom-3 left-3 z-50 flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50/95 px-3 py-1.5 text-xs text-amber-950 shadow-lg backdrop-blur print:hidden">

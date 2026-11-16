@@ -88,10 +88,12 @@ export const ClientShell = ({
       : (getModuleById(activeArea)?.shortName ?? activeArea).toUpperCase();
 
   const institutionHeader = (
+    customInstitutionTitle ||
     [contract.clientName, contract.city].filter(Boolean).join(" — ")
   ).toUpperCase();
 
   const leaderSub =
+    customLeaderSubtitle ||
     contract.branding?.presidentPastor ||
     (contract.responsibleName
       ? contract.segment === "igreja"
@@ -150,10 +152,6 @@ export const ClientShell = ({
 
         {/* Navigation Links */}
         <nav className="flex-1 py-3 px-2 space-y-1 overflow-y-auto">
-          {access.manager && <>
-            <Button variant="ghost" className="w-full justify-start" title="Usuários do contrato" onClick={() => navigate(`${contract.entryPath}/users`)}><Users className="h-4 w-4 mr-2" />{!collapsed && "Usuários"}</Button>
-            <Button variant="ghost" className="w-full justify-start" title="Configurações do contrato" onClick={() => navigate(`${contract.entryPath}/settings`)}><Building2 className="h-4 w-4 mr-2" />{!collapsed && "Configurações"}</Button>
-          </>}
           {sidebarItems.map((item) => (
             <button
               key={item.id}
@@ -173,6 +171,34 @@ export const ClientShell = ({
               {!collapsed && <span className="truncate">{item.label}</span>}
             </button>
           ))}
+          {access.manager && (
+            <div className="pt-2 mt-2 border-t border-white/10 space-y-1">
+              <button
+                type="button"
+                title={collapsed ? "Usuários do contrato" : undefined}
+                onClick={() => {
+                  navigate(`${contract.entryPath}/users`);
+                  setMobileOpen(false);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-slate-300 hover:bg-white/10 hover:text-white transition-colors text-left"
+              >
+                <Users className="h-4 w-4 shrink-0" />
+                {!collapsed && <span className="truncate">Usuários</span>}
+              </button>
+              <button
+                type="button"
+                title={collapsed ? "Configurações do contrato" : undefined}
+                onClick={() => {
+                  navigate(`${contract.entryPath}/settings`);
+                  setMobileOpen(false);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-slate-300 hover:bg-white/10 hover:text-white transition-colors text-left"
+              >
+                <Building2 className="h-4 w-4 shrink-0" />
+                {!collapsed && <span className="truncate">Configurações</span>}
+              </button>
+            </div>
+          )}
         </nav>
 
         {/* Footer badge */}
@@ -347,7 +373,7 @@ export const ClientShell = ({
                   >
                     <Home className="h-3.5 w-3.5 mr-2" /> Ir ao Painel Geral
                   </Button>
-                  {session.mode === "client" && role.role === "master" && (
+                  {session.mode === "client" && (!role.role || role.role === "master") && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -360,9 +386,27 @@ export const ClientShell = ({
                       <LogOut className="h-3.5 w-3.5 mr-2" /> Encerrar sessão do cliente
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" onClick={async () => { await supabase.auth.signOut(); switchToOwnerMode(); navigate(`${contract.entryPath}/login`); }}>
-                    <LogOut className="h-3.5 w-3.5 mr-2" /> Sair
-                  </Button>
+                  {role.role ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        await supabase.auth.signOut();
+                        switchToOwnerMode();
+                        navigate(`${contract.entryPath}/login`);
+                      }}
+                    >
+                      <LogOut className="h-3.5 w-3.5 mr-2" /> Sair
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => navigate(`${contract.entryPath}/login`)}
+                    >
+                      <LogOut className="h-3.5 w-3.5 mr-2" /> Login Admin
+                    </Button>
+                  )}
                 </div>
               </PopoverContent>
             </Popover>

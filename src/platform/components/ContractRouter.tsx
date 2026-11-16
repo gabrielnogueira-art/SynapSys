@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
 import { usePlatformStore } from "@/platform/store";
+import { CONTRACT_COMPONENTS } from "@/contracts/registry";
 import { GenericContractEntry } from "@/contracts/GenericContractEntry";
 import { ContractBanner } from "@/platform/components/ContractBanner";
 import { EBDRegistrationForm } from "@/components/EBDRegistrationForm";
@@ -16,7 +17,7 @@ import { useContractAccess } from "@/platform/useContractAccess";
 import { useUserRole } from "@/hooks/useUserRole";
 import { PlatformUsersTab } from "./PlatformUsersTab";
 import { ContractModulesDialog } from "./ContractModulesDialog";
-import { useViewerSession } from "@/platform/session";
+import { canAccessContract, useViewerSession } from "@/platform/session";
 
 function WithBanner({
   contract,
@@ -47,11 +48,9 @@ export const ContractRouter = () => {
   const session = useViewerSession();
   const contract = contracts.find((c) => c.id === contractId);
 
-  if (loading || access.loading) return <div className="p-8 text-muted-foreground">Carregando contrato…</div>;
+  if (loading) return <div className="p-8 text-muted-foreground">Carregando contrato…</div>;
   if (error) return <div className="p-8" role="alert">{error}</div>;
-  const isLogin = /\/(login|signup)\/?$/.test(location.pathname);
-  if (!isLogin && !access.signedIn) return <Navigate to={`/c/${contractId}/login?next=${encodeURIComponent(location.pathname)}`} replace />;
-  if (!isLogin && !access.allowed) return <div className="p-8 space-y-4"><h1 className="text-xl">Acesso restrito</h1><p>Seu usuário não possui vínculo ativo com este contrato.</p><Link to="/login">Voltar ao login</Link></div>;
+  const isAuthRoute = /\/(login|signup)\/?$/.test(location.pathname);
   if (!contract) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
@@ -75,12 +74,39 @@ export const ContractRouter = () => {
     );
   }
 
-  // Isolamento de contrato na interface: usuário de um contrato não acessa outro contrato
-  if (contract.status === "suspenso" && role.role !== "master" && !isLogin) {
-    const ownContract =
-      session.mode === "client"
-        ? contracts.find((c) => c.id === session.contractId)
-        : undefined;
+  const isClientAccountSignedIn = Boolean(role.role && role.role !== "master");
+
+  if (!canAccessContract(session, contract.id) && !isAuthRoute) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+        <Card className="max-w-md w-full border-destructive/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <ShieldAlert className="h-5 w-5" /> Acesso Restrito ao Contrato
+            </CardTitle>
+            <CardDescription>
+              Esta sessão de cliente está vinculada apenas ao contrato ativo e não possui permissão para acessar{" "}
+              {contract.code}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link to={`/c/${session.contractId}`}>
+              <Button className="w-full">
+                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Meu Sistema
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Isolamento de contrato na interface: usuário de um contrato suspenso não acessa o sistema
+  if (
+    contract.status === "suspenso" &&
+    (isClientAccountSignedIn || (role.role !== "master" && session.mode !== "owner")) &&
+    !isAuthRoute
+  ) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
         <Card className="max-w-md w-full border-destructive/40">
@@ -93,9 +119,10 @@ export const ContractRouter = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link to={session.mode === "client" ? `/c/${session.contractId}` : "/"}>
+            <Link to={session.mode === "owner" ? "/" : `${contract.entryPath}/login`}>
               <Button className="w-full">
-                <ArrowLeft className="h-4 w-4 mr-2" /> Ir para o Meu Contrato
+                <ArrowLeft className="h-4 w-4 mr-2" />{" "}
+                {session.mode === "owner" ? "Voltar à Plataforma" : "Ir para Login"}
               </Button>
             </Link>
           </CardContent>
@@ -104,12 +131,59 @@ export const ContractRouter = () => {
     );
   }
 
-  const EntryComponent = GenericContractEntry;
+  const EntryComponent = CONTRACT_COMPONENTS[contract.id] ?? GenericContractEntry;
 
   return (
     <Routes>
-      <Route path="users" element={access.manager ? <WithBanner contract={contract}><div className="p-4"><PlatformUsersTab contracts={[contract]} users={store.users.filter((u) => u.contractId === contract.id)} isMaster={role.role === "master"} onAddUser={store.addUser} onUpdateStatus={store.updateUserStatus} onDeleteUser={store.deleteUser} /></div></WithBanner> : <Navigate to={contract.entryPath} replace />} />
-      <Route path="settings" element={access.manager ? <ContractModulesDialog contract={contract} brandingOnly={role.role !== "master"} onClose={() => window.location.assign(contract.entryPath)} onSave={async (id, patch) => { if (role.role === "master") await store.updateContract(id, patch); else await store.updateBranding(id, patch.branding); }} /> : <Navigate to={contract.entryPath} replace />} />
+      <Route
+        path="users"
+        element={
+          access.loading || role.loading ? (
+            <div className="p-8 text-muted-foreground">Verificando permissão…</div>
+          ) : access.manager || role.role === "master" ? (
+            <WithBanner contract={contract}>
+              <div className="p-4">
+                <PlatformUsersTab
+                  contracts={[contract]}
+                  users={store.users.filter((u) => u.contractId === contract.id)}
+                  isMaster={role.role === "master"}
+                  onAddUser={store.addUser}
+                  onUpdateStatus={store.updateUserStatus}
+                  onDeleteUser={store.deleteUser}
+                />
+              </div>
+            </WithBanner>
+          ) : (
+            <Navigate
+              to={`${contract.entryPath}/login?next=${encodeURIComponent(location.pathname)}`}
+              replace
+            />
+          )
+        }
+      />
+      <Route
+        path="settings"
+        element={
+          access.loading || role.loading ? (
+            <div className="p-8 text-muted-foreground">Verificando permissão…</div>
+          ) : access.manager || role.role === "master" ? (
+            <ContractModulesDialog
+              contract={contract}
+              brandingOnly={role.role !== "master"}
+              onClose={() => window.location.assign(contract.entryPath)}
+              onSave={async (id, patch) => {
+                if (role.role === "master") await store.updateContract(id, patch);
+                else await store.updateBranding(id, patch.branding);
+              }}
+            />
+          ) : (
+            <Navigate
+              to={`${contract.entryPath}/login?next=${encodeURIComponent(location.pathname)}`}
+              replace
+            />
+          )
+        }
+      />
       <Route index element={<EntryComponent contract={contract} />} />
       <Route
         path="form"

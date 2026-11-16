@@ -90,7 +90,7 @@ const Admin = () => {
     });
   };
 
-  if (!userRole.loading && !userRole.role) return <div className="p-8 space-y-4"><h1 className="text-xl">Acesso EBD não configurado</h1><p>Solicite o vínculo à sua sede, congregação ou classe ao administrador da organização.</p><Button onClick={() => navigate(resolve("/"))}>Voltar ao contrato</Button></div>;
+  if (!isLoading && !userRole.loading && !userRole.role) return <div className="p-8 space-y-4"><h1 className="text-xl">Acesso EBD não configurado</h1><p>Solicite o vínculo à sua sede, congregação ou classe ao administrador da organização.</p><Button onClick={() => navigate(resolve("/"))}>Voltar ao contrato</Button></div>;
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center">
