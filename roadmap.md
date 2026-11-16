@@ -1,3 +1,9 @@
+# Master access and isolated contracts
+- [ ] Provision the requested Master account using Supabase Auth and protected role assignment.
+- [ ] Allow signed-in Master to change their own email and password.
+- [ ] Remove browser-only operational records; persist all contracts and requests with scoped access.
+- [ ] Verify Master login, persisted readback and cross-contract isolation.
+
 # SynapSys identity
 - [x] Apply the supplied brand to platform screens and platform login, retaining EBD/client themes.
 - [x] Reuse the supplied symbol, update favicon and page metadata, and verify desktop/mobile display; local preview uses the derived favicon as a fallback when CDN delivery is unavailable.
