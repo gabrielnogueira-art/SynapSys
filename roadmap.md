@@ -6,6 +6,7 @@
 - [ ] Remediate completed deep-scan permission-helper warnings separately; existing security findings are outside the contracts implementation.
 
 # Centralized contracts
+- [ ] Add persisted friendly client links, copy portal/login links, and optional login-first entry; preserve legacy links.
 - [x] Persist contracts, module configuration and requests in Supabase; provide explicit import of browser-only records.
 - [x] Resolve client links and apply persisted branding, including printed reports.
 - [x] Manage real contract accounts with server-side authorization and active membership checks.
