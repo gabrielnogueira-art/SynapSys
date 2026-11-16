@@ -15,7 +15,17 @@ export const BrandingApplier = () => {
 
   useEffect(() => {
     const root = document.documentElement;
-    const isPlatformRoute = pathname === "/" || pathname.startsWith("/plataforma") || (pathname === "/login" && new URLSearchParams(search).get("next") === "/plataforma");
+    const nextParam = new URLSearchParams(search).get("next");
+    const isPlatformLoginRoute =
+      pathname === "/login" &&
+      nextParam !== "/admin" &&
+      nextParam !== "/professor" &&
+      nextParam !== "/ebd";
+    const isPlatformRoute =
+      pathname === "/" ||
+      pathname === "/site" ||
+      pathname.startsWith("/plataforma") ||
+      isPlatformLoginRoute;
     root.classList.toggle("synapsys-platform", isPlatformRoute);
     const contractMatch = pathname.match(/^\/c\/([^/]+)/);
     const activeContract = contractMatch ? contracts.find((c) => c.id === contractMatch[1] || c.slug === contractMatch[1]) : undefined;

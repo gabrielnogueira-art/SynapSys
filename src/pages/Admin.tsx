@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,7 +46,7 @@ const Admin = () => {
     let active = true;
     let hasSession = false;
     let resolved = false;
-    const finish = (session: any) => {
+    const finish = (session: Session | null) => {
       if (!active) return;
       if (session) {
         hasSession = true;
@@ -118,7 +119,7 @@ const Admin = () => {
               </Button>
             )}
             {!contractId && isMaster && (
-              <Button onClick={() => navigate("/")} variant="secondary">
+              <Button onClick={() => navigate("/plataforma")} variant="secondary">
                 Plataforma
               </Button>
             )}

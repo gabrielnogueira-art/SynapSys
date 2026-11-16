@@ -132,7 +132,7 @@ export const CommerceContractShell = ({
                 className="w-full"
                 onClick={() => {
                   switchToOwnerMode();
-                  navigate("/");
+                  navigate("/plataforma");
                 }}
               >
                 Voltar à Plataforma

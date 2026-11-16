@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Navigate, Routes, Route } from "react-router-dom";
 import { EBDRegistrationForm } from "./components/EBDRegistrationForm";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -12,6 +12,7 @@ import { BrandingApplier } from "./components/BrandingApplier";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { PlatformDashboard } from "@/platform/pages/PlatformDashboard";
+import { SynapSysSite } from "@/platform/pages/SynapSysSite";
 import { ContractRouter } from "@/platform/components/ContractRouter";
 import { SimulationFloatingPill } from "@/platform/components/SimulationFloatingPill";
 
@@ -23,7 +24,8 @@ function App() {
       <SonnerToaster />
       <SimulationFloatingPill />
       <Routes>
-        <Route path="/" element={<PlatformDashboard />} />
+        <Route path="/" element={<SynapSysSite />} />
+        <Route path="/site" element={<Navigate to="/" replace />} />
         <Route path="/plataforma" element={<PlatformDashboard />} />
         <Route path="/c/:contractId/*" element={<ContractRouter />} />
         <Route path="/ebd" element={<Index />} />

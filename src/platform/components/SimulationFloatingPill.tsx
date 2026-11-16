@@ -29,7 +29,7 @@ export const SimulationFloatingPill = () => {
         className="h-6 px-2 text-[11px] bg-amber-200/80 hover:bg-amber-300 text-amber-950"
         onClick={() => {
           switchToOwnerMode();
-          navigate("/");
+          navigate("/plataforma");
         }}
       >
         <LogOut className="h-3 w-3 mr-1" /> Voltar ao Modo Empreendedor

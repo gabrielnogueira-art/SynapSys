@@ -85,7 +85,7 @@ export const ContractBanner = ({
       <div className="bg-slate-950 text-slate-100 border-b border-slate-800 px-4 py-1.5 flex items-center justify-between text-xs print:hidden">
         <div className="flex items-center gap-2">
           <Badge className="bg-indigo-600 text-white text-[10px]">DONO DA PLATAFORMA</Badge>
-          <Link to="/" className="inline-flex items-center gap-1 text-slate-300 hover:text-white">
+          <Link to="/plataforma" className="inline-flex items-center gap-1 text-slate-300 hover:text-white">
             <ArrowLeft className="h-3.5 w-3.5" /> Plataforma
           </Link>
           <span className="text-slate-600">|</span>
@@ -108,7 +108,7 @@ export const ContractBanner = ({
     <div className="bg-slate-950 text-slate-100 border-b border-indigo-900/60 px-4 py-2 print:hidden">
       <div className="container mx-auto flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex flex-wrap items-center gap-2">
-          <Link to="/">
+          <Link to="/plataforma">
             <Button
               size="sm"
               variant="secondary"

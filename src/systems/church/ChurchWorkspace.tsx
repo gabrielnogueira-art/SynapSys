@@ -308,7 +308,7 @@ export const ChurchWorkspace = ({ contract, overrides, initialArea }: ChurchWork
                 className="w-full"
                 onClick={() => {
                   switchToOwnerMode();
-                  navigate("/");
+                  navigate("/plataforma");
                 }}
               >
                 Voltar à Plataforma

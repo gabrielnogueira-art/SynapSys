@@ -208,6 +208,7 @@ export const PlatformDashboard = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Link to="/"><Button variant="ghost" size="sm"><Globe className="h-4 w-4 mr-1.5" /> Ver Site</Button></Link>
             {role.role === "master" && <Button variant="outline" size="sm" onClick={() => setAccountOpen(true)}><Settings2 className="h-4 w-4 mr-1.5" /> Meu acesso</Button>}
             {role.role === "master" ? (
               <Button
@@ -232,7 +233,7 @@ export const PlatformDashboard = () => {
               try {
                 const count = await store.importLegacyBrowserData();
                 toast({ title: `${count} contrato(s) importado(s)`, description: "Contas antigas de demonstração não foram transformadas em logins." });
-              } catch (e: any) { toast({ variant: "destructive", title: "Falha ao importar", description: e.message }); }
+              } catch (e: unknown) { toast({ variant: "destructive", title: "Falha ao importar", description: e instanceof Error ? e.message : String(e) }); }
             }}>Importar dados deste navegador</Button>}
             <Button size="sm" onClick={() => setNewContractOpen(true)}>
               <Plus className="h-4 w-4 mr-1.5" /> Novo Contrato
@@ -438,7 +439,7 @@ export const PlatformDashboard = () => {
                                   `Remover o contrato ${contract.code} (${contract.clientName})?`
                                 )
                               ) {
-                                try { await store.deleteContract(contract.id); } catch (e: any) { toast({ variant: "destructive", title: "Não foi possível excluir", description: e.message }); }
+                                try { await store.deleteContract(contract.id); } catch (e: unknown) { toast({ variant: "destructive", title: "Não foi possível excluir", description: e instanceof Error ? e.message : String(e) }); }
                               }
                             }}
                           >

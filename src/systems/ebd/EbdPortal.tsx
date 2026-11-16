@@ -41,7 +41,7 @@ export const EbdPortal = ({ contract, overrides, basePath = "" }: EbdPortalProps
       : "/admin"
     : basePath
     ? `${basePath}/login?next=${encodeURIComponent(`${basePath}/admin`)}`
-    : "/login";
+    : "/login?next=%2Fadmin";
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center p-4">

@@ -401,7 +401,7 @@ export const ClientShell = ({
                       className="w-full justify-start text-rose-600 hover:text-rose-700"
                       onClick={() => {
                         switchToOwnerMode();
-                        navigate("/");
+                        navigate("/plataforma");
                       }}
                     >
                       <LogOut className="h-3.5 w-3.5 mr-2" /> Encerrar sessão do cliente

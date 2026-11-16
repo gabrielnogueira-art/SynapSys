@@ -67,10 +67,10 @@ export const ContractRouter = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link to={session.mode === "client" ? `/c/${session.contractId}` : "/"}>
+            <Link to={session.mode === "client" ? `/c/${session.contractId}` : role.role === "master" ? "/plataforma" : "/"}>
               <Button className="w-full">
                 <ArrowLeft className="h-4 w-4 mr-2" />{" "}
-                {session.mode === "client" ? "Voltar ao Meu Sistema" : "Voltar à Plataforma"}
+                {session.mode === "client" ? "Voltar ao Meu Sistema" : role.role === "master" ? "Voltar à Plataforma" : "Voltar ao Site"}
               </Button>
             </Link>
           </CardContent>
