@@ -134,10 +134,10 @@ export const NewContractDialog = ({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
+            <Button variant="outline"
               type="button"
               onClick={() => handleSegmentChange("igreja")}
-              className={`p-3 rounded-lg border text-left transition-all ${
+              className={`h-auto block whitespace-normal p-3 rounded-lg border text-left transition-all ${
                 segment === "igreja"
                   ? "border-primary bg-primary/5 ring-1 ring-primary"
                   : "border-border hover:bg-muted/50"
@@ -149,24 +149,24 @@ export const NewContractDialog = ({
               <p className="text-xs text-muted-foreground mt-1">
                 EBD, Tesouraria Eclesiástica e Secretaria da Igreja.
               </p>
-            </button>
+            </Button>
 
-            <button
+            <Button variant="outline"
               type="button"
               onClick={() => handleSegmentChange("comercio")}
-              className={`p-3 rounded-lg border text-left transition-all ${
+              className={`h-auto block whitespace-normal p-3 rounded-lg border text-left transition-all ${
                 segment === "comercio"
-                  ? "border-emerald-600 bg-emerald-50/70 ring-1 ring-emerald-600"
+                  ? "border-primary bg-primary/10 ring-1 ring-primary"
                   : "border-border hover:bg-muted/50"
               }`}
             >
               <div className="flex items-center gap-2 font-semibold text-sm">
-                <Store className="h-4 w-4 text-emerald-700" /> Projeto: Comércio & Empresas
+                <Store className="h-4 w-4 text-primary" /> Projeto: Comércio & Empresas
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 Tesouraria Comercial, Secretaria, Estoque, RH e PDV.
               </p>
-            </button>
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

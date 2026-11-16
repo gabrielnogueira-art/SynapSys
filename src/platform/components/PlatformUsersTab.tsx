@@ -309,9 +309,9 @@ export const PlatformUsersTab = ({
                             }
                           >
                             {u.status === "bloqueado" ? (
-                              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                              <CheckCircle2 className="h-4 w-4 text-success" />
                             ) : (
-                              <Ban className="h-4 w-4 text-amber-600" />
+                              <Ban className="h-4 w-4 text-primary" />
                             )}
                           </Button>
                           {u.accessLevel !== "dono_plataforma" && (isMaster || u.accessLevel !== "gestor_contrato") && (

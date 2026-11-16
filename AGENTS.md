@@ -1,4 +1,6 @@
 ## Platform rules
+- Scope the management brand's CSS tokens to central platform and platform-login routes on the document root so portaled controls share the theme without overriding EBD/customer branding.
+- Reuse the supplied platform symbol through its asset pointer and a shared PlatformBrand component to keep platform header and login consistent.
 - Supabase is the authoritative store for contracts, memberships and requests; browser storage is only an explicit legacy import source.
 - Friendly links resolve to immutable contract IDs before membership checks; public directory preferences are projected by protected triggers and IDs remain valid legacy links.
 - Shared contract link helpers produce published portal/login URLs; address uniqueness is enforced in the database to prevent client-link ambiguity.

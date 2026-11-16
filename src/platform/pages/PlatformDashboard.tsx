@@ -50,6 +50,7 @@ import { PlatformUsersTab } from "@/platform/components/PlatformUsersTab";
 import { PlatformRequestsTab } from "@/platform/components/PlatformRequestsTab";
 import { PlatformCatalogTab } from "@/platform/components/PlatformCatalogTab";
 import { useToast } from "@/hooks/use-toast";
+import { PlatformBrand } from "@/platform/components/PlatformBrand";
 import { SupabaseStatusBadge } from "@/components/SupabaseStatusBadge";
 import {
   switchToClientSimulation,
@@ -186,32 +187,13 @@ export const PlatformDashboard = () => {
   if (store.error) return <div className="p-8 space-y-4"><p role="alert">{store.error}</p><Button onClick={() => store.reload()}>Tentar novamente</Button></div>;
 
   return (
-    <div className="min-h-screen bg-slate-50/80 text-slate-900">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Top Bar da Plataforma */}
-      <header className="sticky top-0 z-20 border-b bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-20 platform-topbar border-b bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-slate-900 text-white flex items-center justify-center shadow-sm">
-              <LayoutGrid className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
-                  Plataforma Central de Gestão
-                </h1>
-                <Badge variant="outline" className="text-[11px] bg-slate-100">
-                  Multi-Contratos
-                </Badge>
-                {role.role === "master" && (
-                  <Badge className="text-[11px] bg-emerald-600 hover:bg-emerald-600 text-white">
-                    Master Supabase
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Painel do Empreendedor ({authState.email ? authState.email : "Acesso Direto Local"}) • Contratos vigentes, usuários e projetos isolados por segmento
-              </p>
-            </div>
+            <PlatformBrand />
+            {role.role === "master" && <Badge variant="outline" className="text-[11px] border-primary/30 text-primary">Master</Badge>}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -235,7 +217,7 @@ export const PlatformDashboard = () => {
             ) : (
               <Link to="/login?next=/plataforma">
                 <Button variant="outline" size="sm" title="Autenticar conta Master do Supabase para gerenciar logins reais">
-                  <LogIn className="h-4 w-4 mr-1.5" /> Conectar Master (Supabase)
+                  <LogIn className="h-4 w-4 mr-1.5" /> Entrar como Master
                 </Button>
               </Link>
             )}
@@ -253,13 +235,17 @@ export const PlatformDashboard = () => {
       </header>
 
       <main className="container mx-auto px-4 sm:px-6 py-6 space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-3 pt-2">
+          <div><p className="text-xs text-primary mb-2">PLATAFORMA DE GESTÃO</p><h1 className="text-2xl sm:text-3xl font-semibold">Visão geral</h1></div>
+          <p className="text-sm text-muted-foreground">{authState.email || "Gestão central"}</p>
+        </div>
         {/* KPIs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
+          <Card className="platform-metric">
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center justify-between">
                 <span>Contratos na Plataforma</span>
-                <Building2 className="h-4 w-4 text-slate-500" />
+                <Building2 className="h-4 w-4 text-muted-foreground" />
               </CardDescription>
               <CardTitle className="text-2xl">{store.contracts.length}</CardTitle>
               <p className="text-xs text-muted-foreground">
@@ -268,13 +254,13 @@ export const PlatformDashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card>
+          <Card className="platform-metric">
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center justify-between">
                 <span>Projetos por Segmento</span>
-                <Church className="h-4 w-4 text-blue-600" />
+                <Church className="h-4 w-4 text-primary" />
               </CardDescription>
-              <CardTitle className="text-2xl">
+              <CardTitle className="text-xl">
                 {metrics.churchCount} Igreja • {metrics.commerceCount} Comércio
               </CardTitle>
               <p className="text-xs text-muted-foreground">
@@ -283,11 +269,11 @@ export const PlatformDashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card>
+          <Card className="platform-metric">
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center justify-between">
                 <span>Usuários Vinculados</span>
-                <Users className="h-4 w-4 text-indigo-600" />
+                <Users className="h-4 w-4 text-accent" />
               </CardDescription>
               <CardTitle className="text-2xl">{store.users.length}</CardTitle>
               <p className="text-xs text-muted-foreground">
@@ -296,11 +282,11 @@ export const PlatformDashboard = () => {
             </CardHeader>
           </Card>
 
-          <Card>
+          <Card className="platform-metric">
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center justify-between">
                 <span>Adequações Solicitadas</span>
-                <FileEdit className="h-4 w-4 text-amber-600" />
+                <FileEdit className="h-4 w-4 text-primary" />
               </CardDescription>
               <CardTitle className="text-2xl">{metrics.openRequests}</CardTitle>
               <p className="text-xs text-muted-foreground">
@@ -313,24 +299,24 @@ export const PlatformDashboard = () => {
         {/* Navegação principal */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
-            <TabsTrigger value="contracts" className="py-2">
+            <TabsTrigger value="contracts" className="py-3 whitespace-normal text-center">
               Contratos Vigentes ({store.contracts.length})
             </TabsTrigger>
-            <TabsTrigger value="users" className="py-2">
+            <TabsTrigger value="users" className="py-3 whitespace-normal text-center">
               Usuários & Acessos ({store.users.length})
             </TabsTrigger>
-            <TabsTrigger value="requests" className="py-2">
+            <TabsTrigger value="requests" className="py-3 whitespace-normal text-center">
               Solicitações de Ajuste ({metrics.openRequests})
             </TabsTrigger>
-            <TabsTrigger value="catalog" className="py-2">
-              Catálogo & Arquitetura
+            <TabsTrigger value="catalog" className="py-3 whitespace-normal text-center">
+              Catálogo de Módulos
             </TabsTrigger>
           </TabsList>
 
           {/* TAB 1: CONTRATOS */}
           <TabsContent value="contracts" className="space-y-4">
-            <Card>
-              <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="border-b border-border pb-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="relative flex-1 min-w-[220px]">
                   <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
                   <Input
@@ -371,8 +357,8 @@ export const PlatformDashboard = () => {
                     </SelectContent>
                   </Select>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {filteredContracts.map((contract) => {
@@ -394,11 +380,11 @@ export const PlatformDashboard = () => {
                     <CardHeader className="pb-3 space-y-2.5">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge className="font-mono bg-slate-900 text-white hover:bg-slate-900">
+                          <Badge className="font-mono bg-secondary text-secondary-foreground hover:bg-secondary">
                             {contract.code}
                           </Badge>
                           <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
-                          <Badge className={seg.badgeColor} variant="outline">
+                          <Badge className={contract.segment === "igreja" ? "bg-primary/10 text-primary border-primary/30" : "bg-accent/10 text-accent border-accent/30"} variant="outline">
                             {contract.segment === "igreja" ? (
                               <Church className="h-3 w-3 mr-1" />
                             ) : (
@@ -468,10 +454,10 @@ export const PlatformDashboard = () => {
                       </div>
 
                       {/* Pasta isolada */}
-                      <div className="rounded-md bg-slate-100 border border-slate-200 px-3 py-2 flex items-center justify-between gap-2">
+                      <div className="rounded-md bg-muted border border-border px-3 py-2 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <FolderGit2 className="h-4 w-4 text-amber-600 shrink-0" />
-                          <code className="text-xs text-slate-700 truncate">
+                          <FolderGit2 className="h-4 w-4 text-primary shrink-0" />
+                          <code className="text-xs text-muted-foreground truncate">
                             GitHub/{contract.codeFolder}/
                           </code>
                         </div>
@@ -483,7 +469,7 @@ export const PlatformDashboard = () => {
                         >
                           {copiedContractId === contract.id ? (
                             <>
-                              <Check className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Copiado
+                              <Check className="h-3.5 w-3.5 mr-1 text-success" /> Copiado
                             </>
                           ) : (
                             <>
@@ -510,7 +496,7 @@ export const PlatformDashboard = () => {
                           className="flex-1 min-w-[160px]"
                           onClick={() => navigate(contract.entryPath)}
                         >
-                          Acessar (Empreendedor)
+                          Abrir sistema
                           <ArrowRight className="h-4 w-4 ml-1.5" />
                         </Button>
 

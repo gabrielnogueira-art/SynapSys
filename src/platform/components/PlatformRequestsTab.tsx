@@ -151,7 +151,7 @@ export const PlatformRequestsTab = ({
               <div className="space-y-1">
                 <Label>Pasta Alvo (Isolamento)</Label>
                 <div className="h-10 px-3 rounded-md border bg-muted/40 flex items-center gap-1.5 text-xs font-mono text-muted-foreground truncate">
-                  <FolderGit2 className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                  <FolderGit2 className="h-3.5 w-3.5 shrink-0 text-primary" />
                   <span className="truncate">
                     {selectedContract ? `GitHub/${selectedContract.codeFolder}/` : "-"}
                   </span>
@@ -286,7 +286,7 @@ export const PlatformRequestsTab = ({
                       >
                         {copiedId === req.id ? (
                           <>
-                            <Check className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Copiado
+                            <Check className="h-3.5 w-3.5 mr-1 text-success" /> Copiado
                           </>
                         ) : (
                           <>

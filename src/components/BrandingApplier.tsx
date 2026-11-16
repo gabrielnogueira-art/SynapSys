@@ -11,11 +11,12 @@ import { usePlatformStore } from "@/platform/store";
 export const BrandingApplier = () => {
   const { ministry } = useBranding();
   const { contracts } = usePlatformStore();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
 
   useEffect(() => {
     const root = document.documentElement;
-    const isPlatformRoute = pathname === "/" || pathname.startsWith("/plataforma");
+    const isPlatformRoute = pathname === "/" || pathname.startsWith("/plataforma") || (pathname === "/login" && new URLSearchParams(search).get("next") === "/plataforma");
+    root.classList.toggle("synapsys-platform", isPlatformRoute);
     const contractMatch = pathname.match(/^\/c\/([^/]+)/);
     const activeContract = contractMatch ? contracts.find((c) => c.id === contractMatch[1] || c.slug === contractMatch[1]) : undefined;
     const isNonChurchContract = activeContract && activeContract.segment !== "igreja";
@@ -46,7 +47,7 @@ export const BrandingApplier = () => {
       "--gradient-primary",
       `linear-gradient(135deg, hsl(${h} ${s}% ${l}%), hsl(${h} ${Math.min(100, s + 5)}% ${glowL}%))`,
     );
-  }, [ministry?.brand_primary_hsl, pathname, contracts]);
+  }, [ministry?.brand_primary_hsl, pathname, search, contracts]);
 
   return null;
 };

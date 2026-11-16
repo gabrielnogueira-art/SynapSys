@@ -122,3 +122,46 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+/* Central platform identity only; customer and EBD routes retain their tokens. */
+:root.synapsys-platform {
+  --background: 222 47% 11%;
+  --foreground: 210 40% 98%;
+  --card: 222 37% 15%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222 37% 15%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 189 94% 43%;
+  --primary-foreground: 222 47% 11%;
+  --primary-glow: 189 94% 63%;
+  --secondary: 224 71% 40%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 222 30% 19%;
+  --muted-foreground: 215 22% 72%;
+  --accent: 262 83% 58%;
+  --accent-foreground: 210 40% 98%;
+  --border: 219 25% 26%;
+  --input: 219 25% 26%;
+  --ring: 189 94% 43%;
+  --success: 158 64% 52%;
+  --success-bg: 158 35% 16%;
+  --success-foreground: 158 64% 72%;
+  --radius: 0.5rem;
+  --gradient-primary: linear-gradient(hsl(var(--primary)), hsl(var(--primary)));
+  --gradient-secondary: linear-gradient(hsl(var(--muted)), hsl(var(--muted)));
+  --shadow-card: 0 4px 20px -4px hsl(222 47% 4% / 0.25);
+  --shadow-primary: 0 6px 24px -8px hsl(189 94% 43% / 0.25);
+}
+
+.synapsys-platform body {
+  font-family: "Inter", sans-serif;
+  letter-spacing: 0;
+}
+
+.synapsys-platform [class*="tracking-"] { letter-spacing: 0; }
+.platform-topbar { border-top: 3px solid hsl(var(--primary)); }
+.platform-metric { border-top: 2px solid hsl(var(--primary)); }
+.platform-metric:nth-child(2) { border-top-color: hsl(var(--secondary)); }
+.platform-metric:nth-child(3) { border-top-color: hsl(var(--accent)); }
+.platform-metric:nth-child(4) { border-top-color: hsl(var(--success)); }
+.platform-login-panel { background: transparent; border: 0; box-shadow: none; }
