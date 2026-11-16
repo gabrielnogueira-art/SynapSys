@@ -1,3 +1,4 @@
+import { useContractModuleData } from "@/platform/useContractModuleData";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -68,28 +69,7 @@ interface CommerceState {
   sales: SaleOrder[];
 }
 
-const DEFAULT_STATE: CommerceState = {
-  stock: [
-    { id: "st-1", sku: "SKU-101", name: "Produto Principal A", qty: 42, minQty: 15, price: 89.9 },
-    { id: "st-2", sku: "SKU-102", name: "Insumo / Embalagem B", qty: 8, minQty: 12, price: 24.5 },
-    { id: "st-3", sku: "SKU-103", name: "Kit Comercial C", qty: 19, minQty: 5, price: 199.0 },
-  ],
-  cash: [
-    { id: "cs-1", date: "2026-11-12", kind: "receita", description: "Faturamento PDV / Balcão", amount: 3450 },
-    { id: "cs-2", date: "2026-11-13", kind: "despesa", description: "Reposição de fornecedor", amount: 1280 },
-  ],
-  employees: [
-    { id: "em-1", name: "Fernanda Alves", role: "Gerente Comercial", department: "Vendas", shift: "Comercial" },
-    { id: "em-2", name: "Rafael Costa", role: "Analista de Estoque", department: "Logística", shift: "Manhã" },
-  ],
-  docs: [
-    { id: "dc-1", protocol: "ADM-2026-01", title: "Contrato Fornecedor Alpha", responsible: "Secretaria", status: "Vigente" },
-    { id: "dc-2", protocol: "ADM-2026-02", title: "Alvará e Renovação Anual", responsible: "Administrativo", status: "Pendente" },
-  ],
-  sales: [
-    { id: "vd-1", customer: "Cliente Balcão #104", itemsSummary: "2x Produto Principal A", total: 179.8, date: "2026-11-15" },
-  ],
-};
+const DEFAULT_STATE: CommerceState = { stock: [], cash: [], employees: [], docs: [], sales: [] };
 
 export const CommerceWorkspace = ({
   contract,
@@ -100,23 +80,7 @@ export const CommerceWorkspace = ({
   activeModule: CommerceModuleId;
   onSelectModule: (m: CommerceModuleId) => void;
 }) => {
-  const storageKey = `commerce_workspace_${contract.id}`;
-  const [state, setState] = useState<CommerceState>(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      return raw ? JSON.parse(raw) : DEFAULT_STATE;
-    } catch {
-      return DEFAULT_STATE;
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(state));
-    } catch {
-      // ignore
-    }
-  }, [state, storageKey]);
+  const { value: state, update: setState, loading, error } = useContractModuleData(contract.id, "commerce", DEFAULT_STATE);
 
   const enabledModules = contract.activeModules.filter((m): m is CommerceModuleId =>
     m.startsWith("comercio_")
@@ -147,6 +111,8 @@ export const CommerceWorkspace = ({
   const expense = state.cash.filter((c) => c.kind === "despesa").reduce((s, c) => s + c.amount, 0);
   const lowStock = state.stock.filter((s) => s.qty <= s.minQty).length;
 
+  if (loading) return <p className="p-6 text-muted-foreground">Carregando dados…</p>;
+  if (error) return <p role="alert" className="p-6 text-destructive">{error}</p>;
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">

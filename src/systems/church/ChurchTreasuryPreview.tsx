@@ -1,3 +1,4 @@
+import { useContractModuleData } from "@/platform/useContractModuleData";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,35 +21,7 @@ interface TreasuryEntry {
   amount: number;
 }
 
-const DEFAULT_ENTRIES: TreasuryEntry[] = [
-  {
-    id: "tr-1",
-    date: "2026-11-10",
-    type: "entrada",
-    category: "Dízimos",
-    description: "Culto de Domingo — Sede",
-    congregation: "Igreja Sede",
-    amount: 4850,
-  },
-  {
-    id: "tr-2",
-    date: "2026-11-10",
-    type: "entrada",
-    category: "Ofertas EBD",
-    description: "Repasse de ofertas das classes",
-    congregation: "Igreja Sede",
-    amount: 640,
-  },
-  {
-    id: "tr-3",
-    date: "2026-11-12",
-    type: "saida",
-    category: "Manutenção & Energia",
-    description: "Conta de energia do templo central",
-    congregation: "Igreja Sede",
-    amount: 920,
-  },
-];
+const DEFAULT_ENTRIES: TreasuryEntry[] = [];
 
 export const ChurchTreasuryPreview = ({
   contractId,
@@ -59,15 +32,7 @@ export const ChurchTreasuryPreview = ({
   clientName: string;
   activeSection?: TreasurySection;
 }) => {
-  const storageKey = `church_treasury_${contractId}`;
-  const [entries, setEntries] = useState<TreasuryEntry[]>(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      return raw ? JSON.parse(raw) : DEFAULT_ENTRIES;
-    } catch {
-      return DEFAULT_ENTRIES;
-    }
-  });
+  const { value: entries, update: setEntries, loading, error } = useContractModuleData(contractId, "church_treasury", DEFAULT_ENTRIES);
 
   const [type, setType] = useState<"entrada" | "saida">(
     activeSection === "saidas" ? "saida" : "entrada"
@@ -81,14 +46,6 @@ export const ChurchTreasuryPreview = ({
     if (activeSection === "entradas") setType("entrada");
     if (activeSection === "saidas") setType("saida");
   }, [activeSection]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(entries));
-    } catch {
-      // ignore quota errors
-    }
-  }, [entries, storageKey]);
 
   const totals = useMemo(() => {
     const income = entries.filter((e) => e.type === "entrada").reduce((s, e) => s + e.amount, 0);
@@ -124,6 +81,8 @@ export const ChurchTreasuryPreview = ({
   const brl = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+  if (loading) return <p className="p-6 text-muted-foreground">Carregando dados…</p>;
+  if (error) return <p role="alert" className="p-6 text-destructive">{error}</p>;
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <div className="flex flex-wrap items-center justify-between gap-4">
