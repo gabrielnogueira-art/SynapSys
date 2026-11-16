@@ -1,8 +1,8 @@
 # Master access and isolated contracts
-- [ ] Provision the requested Master account using Supabase Auth and protected role assignment.
-- [ ] Allow signed-in Master to change their own email and password.
-- [ ] Remove browser-only operational records; persist all contracts and requests with scoped access.
-- [ ] Verify Master login, persisted readback and cross-contract isolation.
+- [x] Provision the requested Master account using Supabase Auth and protected role assignment; email confirmation remains required.
+- [x] Allow signed-in Master to change their own email and password; two credential tests passed.
+- [x] Remove browser-only operational writes; persist all five contracts and connect treasury, secretariat and commerce to contract-scoped Supabase data.
+- [ ] Verify authenticated Master login, module save/reload and cross-contract UI: waits on the account's email confirmation; administrative key was rejected by Supabase (401).
 
 # SynapSys identity
 - [x] Apply the supplied brand to platform screens and platform login, retaining EBD/client themes.
