@@ -1,10 +1,5 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  INITIAL_CHANGE_REQUESTS,
-  INITIAL_CONTRACTS,
-  INITIAL_PLATFORM_USERS,
-} from "@/contracts/registry";
 import { ChangeRequest, ContractStatus, ModuleId, PlatformContract, PlatformUser, ProjectSegment } from "./types";
 import { slugifyContractFolder } from "./catalog";
 import { contractEntryPath, normalizeContractSlug, validateContractSlug } from "./contractLinks";
@@ -20,17 +15,6 @@ interface LocalFallbackStore {
   deletedContractIds?: string[];
   deletedUserIds?: string[];
   deletedRequestIds?: string[];
-}
-
-function getLocalFallbackSeeds(): LocalFallbackStore {
-  return {
-    contracts: INITIAL_CONTRACTS,
-    users: INITIAL_PLATFORM_USERS,
-    changeRequests: INITIAL_CHANGE_REQUESTS,
-    deletedContractIds: [],
-    deletedUserIds: [],
-    deletedRequestIds: [],
-  };
 }
 
 function readLocalFallback(): LocalFallbackStore | null {
@@ -49,18 +33,6 @@ function readLocalFallback(): LocalFallbackStore | null {
   } catch {
     return null;
   }
-}
-
-function writeLocalFallback(next: LocalFallbackStore) {
-  try {
-    localStorage.setItem(LEGACY_KEY, JSON.stringify(next));
-  } catch {
-    // ignore storage errors
-  }
-}
-
-function getWritableLocalStore(): LocalFallbackStore {
-  return readLocalFallback() ?? getLocalFallbackSeeds();
 }
 
 async function isCurrentUserSupabaseMaster(): Promise<boolean> {
@@ -133,16 +105,14 @@ export async function reloadPlatformStore() {
 
       let users: PlatformUser[] = [];
       let changeRequests: ChangeRequest[] = [];
-      let isMaster = false;
+
 
       if (session.session && uid) {
-        const [{ data: masterRow }, c, m, q] = await Promise.all([
-          db.from("user_roles").select("role").eq("user_id", uid).eq("role", "master").maybeSingle(),
+        const [c, m, q] = await Promise.all([
           db.from("platform_contracts").select("*"),
           db.from("platform_memberships").select("*"),
           db.from("platform_requests").select("*").order("created_at", { ascending: false }),
         ]);
-        isMaster = !!masterRow;
         if (!c.error) {
           (c.data ?? []).forEach((r: any) => map.set(r.id, rowToContract(r)));
         }
@@ -161,46 +131,6 @@ export async function reloadPlatformStore() {
             createdAt: String(r.created_at).slice(0, 10),
           }));
         }
-      }
-
-      // No modo de acesso direto (sem login Master no Supabase), mescla os modelos e edições locais
-      if (!isMaster) {
-        const stored = readLocalFallback();
-        const fallback = stored ?? getLocalFallbackSeeds();
-        const deletedContracts = new Set(fallback.deletedContractIds ?? []);
-        const deletedUsers = new Set(fallback.deletedUserIds ?? []);
-        const deletedRequests = new Set(fallback.deletedRequestIds ?? []);
-
-        deletedContracts.forEach((id) => map.delete(id));
-        fallback.contracts.forEach((c) => {
-          if (deletedContracts.has(c.id)) return;
-          if (!map.has(c.id)) {
-            const existing = map.get(c.id);
-            map.set(c.id, existing ? { ...existing, ...c } : c);
-          }
-        });
-
-        const userMap = new Map<string, PlatformUser>();
-        users.forEach((u) => {
-          if (!deletedUsers.has(u.id)) userMap.set(u.id, u);
-        });
-        fallback.users.forEach((u) => {
-          if (!deletedUsers.has(u.id) && !userMap.has(u.id)) {
-            userMap.set(u.id, u);
-          }
-        });
-        users = [...userMap.values()];
-
-        const reqMap = new Map<string, ChangeRequest>();
-        changeRequests.forEach((r) => {
-          if (!deletedRequests.has(r.id)) reqMap.set(r.id, r);
-        });
-        fallback.changeRequests.forEach((r) => {
-          if (!deletedRequests.has(r.id) && !reqMap.has(r.id)) {
-            reqMap.set(r.id, r);
-          }
-        });
-        changeRequests = [...reqMap.values()];
       }
 
       const contracts = [...map.values()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
@@ -274,193 +204,72 @@ export function usePlatformStore() {
       responsibleEmail: input.responsibleEmail?.trim() || undefined, planName: input.planName?.trim() || undefined,
       monthlyValue: input.monthlyValue, notes: input.notes?.trim() || undefined, branding: {},
     };
-    if (await isCurrentUserSupabaseMaster()) {
-      check(await db.rpc("create_platform_contract", { _id: id, _code: code, _data: data }));
-      await done();
-      const created = getContractById(id);
-      if (!created) throw new Error("Contrato salvo; recarregue a lista para consultá-lo");
-      return created;
-    }
-
-    const created: PlatformContract = {
-      ...data,
-      id,
-      code,
-      codeFolder: `src/contracts/${id}`,
-      entryPath: contractEntryPath({ id, slug }),
-      authSource: "local",
-      createdAt: new Date().toISOString().slice(0, 10),
-    };
-    const local = getWritableLocalStore();
-    local.contracts = [created, ...local.contracts.filter((c) => c.id !== id)];
-    local.deletedContractIds = (local.deletedContractIds ?? []).filter((d) => d !== id);
-    if (created.responsibleEmail) {
-      local.users = [
-        {
-          id: `usr-${Date.now()}`,
-          name: created.responsibleName || created.clientName,
-          email: created.responsibleEmail,
-          contractId: created.id,
-          roleLabel: created.segment === "igreja" ? "Gestor da Igreja" : "Gestor Comercial",
-          accessLevel: "gestor_contrato",
-          authSource: "local",
-          status: "ativo",
-          createdAt: created.createdAt,
-        },
-        ...local.users,
-      ];
-    }
-    writeLocalFallback(local);
+    check(await db.rpc("create_platform_contract", { _id: id, _code: code, _data: data }));
     await done();
+    const created = getContractById(id);
+    if (!created) throw new Error("Contrato salvo; recarregue a lista para consultá-lo");
     return created;
   };
 
+  const requireMaster = async () => {
+    if (!(await isCurrentUserSupabaseMaster())) throw new Error("Entre com a conta Master para gerenciar contratos.");
+  };
   const updateContract = async (contractId: string, patch: Partial<PlatformContract>) => {
-    if (!(await isCurrentUserSupabaseMaster())) throw new Error("Entre com a conta Master para editar contratos.");
+    await requireMaster();
     if (patch.slug) patch = { ...patch, slug: validateContractSlug(patch.slug) };
     const current = getContractById(contractId);
     if (!current) throw new Error("Contrato não encontrado");
-    if (await isCurrentUserSupabaseMaster()) {
-      check(await db.from("platform_contracts").update({ data: contractData({ ...current, ...patch }) }).eq("id", contractId));
-      await done();
-      return;
-    }
-    const local = getWritableLocalStore();
-    const updated = { ...current, ...patch };
-    const exists = local.contracts.some((c) => c.id === contractId);
-    local.contracts = exists
-      ? local.contracts.map((c) => (c.id === contractId ? updated : c))
-      : [updated, ...local.contracts];
-    writeLocalFallback(local);
+    check(await db.from("platform_contracts").update({ data: contractData({ ...current, ...patch }) }).eq("id", contractId));
     await done();
   };
-
   const deleteContract = async (contractId: string) => {
-    if (await isCurrentUserSupabaseMaster()) {
-      check(await db.from("platform_contracts").delete().eq("id", contractId));
-      await done();
-      return;
-    }
-    const local = getWritableLocalStore();
-    local.contracts = local.contracts.filter((c) => c.id !== contractId);
-    local.users = local.users.filter((u) => u.contractId !== contractId);
-    local.changeRequests = local.changeRequests.filter((r) => r.contractId !== contractId);
-    local.deletedContractIds = [...new Set([...(local.deletedContractIds ?? []), contractId])];
-    writeLocalFallback(local);
+    await requireMaster();
+    check(await db.from("platform_contracts").delete().eq("id", contractId));
     await done();
   };
-
   const addUser = async (input: Omit<PlatformUser, "id" | "createdAt"> & { password: string }) => {
-    const { data: s } = await supabase.auth.getSession();
-    if (s.session) {
-      await callUsers({ action: "create", ...input });
-      await done();
-      return;
-    }
-    const { password: _ignored, ...safeInput } = input;
-    const local = getWritableLocalStore();
-    local.users = [
-      {
-        ...safeInput,
-        id: `usr-${Date.now()}`,
-        authSource: "local",
-        createdAt: new Date().toISOString().slice(0, 10),
-      },
-      ...local.users,
-    ];
-    writeLocalFallback(local);
+    await callUsers({ action: "create", ...input });
     await done();
   };
-
   const updateUserStatus = async (userId: string, status: PlatformUser["status"]) => {
-    const { data: s } = await supabase.auth.getSession();
-    if (s.session && !userId.startsWith("usr-")) {
-      await callUsers({ action: "status", membership_id: userId, status });
-      await done();
-      return;
-    }
-    const local = getWritableLocalStore();
-    local.users = local.users.map((u) => (u.id === userId ? { ...u, status } : u));
-    writeLocalFallback(local);
+    await callUsers({ action: "status", membership_id: userId, status });
     await done();
   };
-
   const deleteUser = async (userId: string) => {
-    const { data: s } = await supabase.auth.getSession();
-    if (s.session && !userId.startsWith("usr-")) {
-      await callUsers({ action: "remove", membership_id: userId });
-      await done();
-      return;
-    }
-    const local = getWritableLocalStore();
-    local.users = local.users.filter((u) => u.id !== userId);
-    local.deletedUserIds = [...new Set([...(local.deletedUserIds ?? []), userId])];
-    writeLocalFallback(local);
+    await callUsers({ action: "remove", membership_id: userId });
     await done();
   };
-
   const addChangeRequest = async (input: Omit<ChangeRequest, "id" | "createdAt" | "status">) => {
-    if (await isCurrentUserSupabaseMaster()) {
-      const { data: s } = await supabase.auth.getSession();
-      check(await db.from("platform_requests").insert({
-        contract_id: input.contractId, created_by: s.session?.user.id,
-        data: { title: input.title, description: input.description, targetModule: input.targetModule, status: "solicitado" },
-      }));
-      await done();
-      return;
-    }
-    const local = getWritableLocalStore();
-    local.changeRequests = [
-      {
-        ...input,
-        id: `req-${Date.now()}`,
-        status: "solicitado",
-        createdAt: new Date().toISOString().slice(0, 10),
-      },
-      ...local.changeRequests,
-    ];
-    writeLocalFallback(local);
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) throw new Error("Entre para enviar solicitações.");
+    check(await db.from("platform_requests").insert({
+      contract_id: input.contractId, created_by: data.user.id,
+      data: { title: input.title, description: input.description, targetModule: input.targetModule, status: "solicitado" },
+    }));
     await done();
   };
-
   const updateChangeRequestStatus = async (requestId: string, status: ChangeRequest["status"]) => {
-    const r = snapshot.changeRequests.find((x) => x.id === requestId);
-    if (!r) return;
-    if (await isCurrentUserSupabaseMaster() && !requestId.startsWith("req-")) {
-      const { id, contractId, createdAt, ...data } = r;
-      check(await db.from("platform_requests").update({ data: { ...data, status } }).eq("id", requestId));
-      await done();
-      return;
-    }
-    const local = getWritableLocalStore();
-    local.changeRequests = local.changeRequests.map((x) =>
-      x.id === requestId ? { ...x, status } : x
-    );
-    writeLocalFallback(local);
+    await requireMaster();
+    const request = snapshot.changeRequests.find((r) => r.id === requestId);
+    if (!request) throw new Error("Solicitação não encontrada");
+    const { id, contractId, createdAt, ...data } = request;
+    check(await db.from("platform_requests").update({ data: { ...data, status } }).eq("id", requestId));
     await done();
   };
-
   const deleteChangeRequest = async (requestId: string) => {
-    if (await isCurrentUserSupabaseMaster() && !requestId.startsWith("req-")) {
-      check(await db.from("platform_requests").delete().eq("id", requestId));
-      await done();
-      return;
-    }
-    const local = getWritableLocalStore();
-    local.changeRequests = local.changeRequests.filter((x) => x.id !== requestId);
-    local.deletedRequestIds = [...new Set([...(local.deletedRequestIds ?? []), requestId])];
-    writeLocalFallback(local);
+    await requireMaster();
+    check(await db.from("platform_requests").delete().eq("id", requestId));
     await done();
   };
 
   /** Importa contratos/solicitações antigos salvos apenas neste navegador. Não cria logins. */
   const importLegacyBrowserData = async () => {
-    const raw = localStorage.getItem(LEGACY_KEY);
-    if (!raw) return 0;
-    const parsed = JSON.parse(raw);
+    await requireMaster();
+    const parsed = readLocalFallback();
+    if (!parsed) return 0;
     const existing = new Set(snapshot.contracts.map((c) => c.id));
     const toAdd = (parsed.contracts ?? []).filter((c: PlatformContract) => c?.id && !existing.has(c.id));
-    if (toAdd.length) check(await db.from("platform_contracts").insert(toAdd.map((c: PlatformContract) => ({ id: c.id, code: c.code, data: contractData(c) }))));
+    for (const c of toAdd) check(await db.rpc("create_platform_contract", { _id: c.id, _code: c.code, _data: contractData(c) }));
     const ids = new Set([...existing, ...toAdd.map((c: PlatformContract) => c.id)]);
     const reqs = (parsed.changeRequests ?? []).filter((r: ChangeRequest) => ids.has(r.contractId) && !String(r.id).startsWith("req-1") && !String(r.id).startsWith("req-2"));
     for (const r of reqs) await addChangeRequest(r);

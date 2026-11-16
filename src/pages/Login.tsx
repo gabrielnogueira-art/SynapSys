@@ -42,7 +42,7 @@ const Login = () => {
 
     if (has("master")) {
       switchToOwnerMode();
-      navigate(nextPath || resolve("/admin?scope=master"), { replace: true });
+      navigate(nextPath || (isInsideContract ? resolve("/admin?scope=master") : "/plataforma"), { replace: true });
       return;
     }
 

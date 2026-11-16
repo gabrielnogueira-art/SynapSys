@@ -50,6 +50,7 @@ import { PlatformUsersTab } from "@/platform/components/PlatformUsersTab";
 import { PlatformRequestsTab } from "@/platform/components/PlatformRequestsTab";
 import { PlatformCatalogTab } from "@/platform/components/PlatformCatalogTab";
 import { useToast } from "@/hooks/use-toast";
+import { AccountAccessDialog } from "@/platform/components/AccountAccessDialog";
 import { PlatformBrand } from "@/platform/components/PlatformBrand";
 import { SupabaseStatusBadge } from "@/components/SupabaseStatusBadge";
 import {
@@ -75,6 +76,7 @@ export const PlatformDashboard = () => {
   const session = useViewerSession();
   const role = useUserRole();
 
+  const [accountOpen, setAccountOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("contracts");
   const [search, setSearch] = useState("");
   const [segmentFilter, setSegmentFilter] = useState<"all" | ProjectSegment>("all");
@@ -93,8 +95,8 @@ export const PlatformDashboard = () => {
   useEffect(() => {
     let active = true;
     const syncAuth = async () => {
-      const { data } = await supabase.auth.getSession();
-      const user = data.session?.user;
+      const { data } = await supabase.auth.getUser();
+      const user = data.user;
       let ownContractId: string | null = null;
       if (user) {
         const { data: memberships } = await supabase
@@ -111,7 +113,7 @@ export const PlatformDashboard = () => {
     };
     syncAuth();
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      syncAuth();
+      setTimeout(syncAuth, 0);
     });
     return () => {
       active = false;
@@ -186,6 +188,8 @@ export const PlatformDashboard = () => {
 
   if (store.error) return <div className="p-8 space-y-4"><p role="alert">{store.error}</p><Button onClick={() => store.reload()}>Tentar novamente</Button></div>;
 
+  if (!authState.loading && role.role !== "master") return <Navigate to="/login?next=/plataforma" replace />;
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Top Bar da Plataforma */}
@@ -202,6 +206,7 @@ export const PlatformDashboard = () => {
                 <LogIn className="h-4 w-4 mr-1.5" /> Portal Público (EBD)
               </Button>
             </Link>
+            {role.role === "master" && <Button variant="outline" size="sm" onClick={() => setAccountOpen(true)}><Settings2 className="h-4 w-4 mr-1.5" /> Meu acesso</Button>}
             {role.role === "master" ? (
               <Button
                 variant="ghost"
@@ -210,7 +215,7 @@ export const PlatformDashboard = () => {
                   switchToOwnerMode();
                   await supabase.auth.signOut();
                 }}
-                title="Encerrar sessão Master (mantém acesso direto à plataforma)"
+                title="Encerrar sessão Master"
               >
                 <LogOut className="h-4 w-4 mr-1.5" /> Sair
               </Button>
@@ -600,6 +605,7 @@ export const PlatformDashboard = () => {
         }}
       />
 
+      <AccountAccessDialog open={accountOpen} onOpenChange={setAccountOpen} email={authState.email ?? ""} />
       <SupabaseStatusBadge />
     </div>
   );
