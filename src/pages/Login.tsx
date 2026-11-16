@@ -10,6 +10,7 @@ import { Link } from "react-router-dom";
 import { useContractBasePath } from "@/platform/useContractBasePath";
 import { switchToOwnerMode } from "@/platform/session";
 import { useBranding } from "@/hooks/useBranding";
+import { PlatformBrand } from "@/platform/components/PlatformBrand";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -188,7 +189,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-secondary/10 via-background to-blue-500/10 flex items-center justify-center p-4">
+    <div className={`min-h-screen flex items-center justify-center p-4 ${isPlatformLogin ? "bg-background" : "bg-gradient-secondary"}`}>
       <div className="w-full max-w-md">
         <Button 
           variant="ghost" 
@@ -198,26 +199,26 @@ const Login = () => {
           <ArrowLeft className="h-4 w-4" />
           {isPlatformLogin ? "Ir para Portal Público da EBD" : "Voltar à Página Inicial"}
         </Button>
-        <Card className="shadow-2xl border-primary/20">
+        <Card className={isPlatformLogin ? "platform-login-panel" : "shadow-2xl border-primary/20"}>
           <CardHeader className="text-center">
             {isInsideContract && ministry?.logo_url && <img src={ministry.logo_url} alt={ministry.display_name || ministry.name} className="h-16 max-w-full object-contain mx-auto mb-3" />}
             {isPlatformLogin ? (
-              <LayoutGrid className="mx-auto h-12 w-12 text-primary mb-4" />
+              <PlatformBrand prominent className="justify-center mb-8" />
             ) : (
               <UserCog className="mx-auto h-12 w-12 text-primary mb-4" />
             )}
             <CardTitle className="text-2xl font-bold">
-              {isPlatformLogin ? "Plataforma • Gestão de Contratos" : isInsideContract && ministry ? ministry.display_name || ministry.name : "Acesso Administrativo"}
+              {isPlatformLogin ? "Acesso à plataforma" : isInsideContract && ministry ? ministry.display_name || ministry.name : "Acesso Administrativo"}
             </CardTitle>
             <CardDescription>
               {isPlatformLogin
-                ? "Entre com sua conta Master (empreendedor) para gerenciar todos os contratos e sistemas."
+                ? "Gestão de contratos • Conta Master"
                 : "Digite suas credenciais para aceder ao painel de controlo."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {nonMasterSession && (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 space-y-2">
+              <div className="rounded-lg border border-border bg-muted p-3 text-xs text-foreground space-y-2">
                 <p>
                   Sessão atual conectada como <strong>{nonMasterSession.email}</strong> (conta de contrato/cliente).
                   Para abrir a Gestão de Contratos, entre com a conta <strong>Master</strong> abaixo ou saia desta sessão.
@@ -227,7 +228,7 @@ const Login = () => {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-7 text-xs bg-white"
+                    className="h-7 text-xs bg-card"
                     onClick={async () => {
                       await supabase.auth.signOut();
                       setNonMasterSession(null);
@@ -253,6 +254,8 @@ const Login = () => {
               <div className="space-y-2">
                 <Input
                   id="email"
+                  aria-label="E-mail"
+                  autoComplete="email"
                   type="email"
                   placeholder="Email"
                   value={email}
@@ -265,6 +268,8 @@ const Login = () => {
               <div className="space-y-2">
                 <Input
                   id="password"
+                  aria-label="Senha"
+                  autoComplete="current-password"
                   type="password"
                   placeholder="Senha"
                   value={password}
