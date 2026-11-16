@@ -174,7 +174,7 @@ export async function reloadPlatformStore() {
         deletedContracts.forEach((id) => map.delete(id));
         fallback.contracts.forEach((c) => {
           if (deletedContracts.has(c.id)) return;
-          if (!map.has(c.id) || stored) {
+          if (!map.has(c.id)) {
             const existing = map.get(c.id);
             map.set(c.id, existing ? { ...existing, ...c } : c);
           }

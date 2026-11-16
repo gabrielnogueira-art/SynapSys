@@ -34,7 +34,7 @@ export const ContractBanner = ({
 
   // Nunca exibir para usuários finais autenticados em contratos ou durante simulação de cliente
   const isClientAccountSignedIn = Boolean(role.role && role.role !== "master");
-  if (session.mode !== "owner" || isClientAccountSignedIn) {
+  if (session.mode !== "owner" || isClientAccountSignedIn || role.role !== "master") {
     return null;
   }
 

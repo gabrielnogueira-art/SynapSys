@@ -9,6 +9,7 @@ import { UserCog, ArrowLeft, LayoutGrid, LogOut } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useContractBasePath } from "@/platform/useContractBasePath";
 import { switchToOwnerMode } from "@/platform/session";
+import { useBranding } from "@/hooks/useBranding";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -22,6 +23,7 @@ const Login = () => {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const { isInsideContract, resolve } = useContractBasePath();
+  const { ministry } = useBranding();
 
   // Same-origin relative paths only, to avoid open-redirect abuse.
   const rawNext = searchParams.get("next");
@@ -198,13 +200,14 @@ const Login = () => {
         </Button>
         <Card className="shadow-2xl border-primary/20">
           <CardHeader className="text-center">
+            {isInsideContract && ministry?.logo_url && <img src={ministry.logo_url} alt={ministry.display_name || ministry.name} className="h-16 max-w-full object-contain mx-auto mb-3" />}
             {isPlatformLogin ? (
               <LayoutGrid className="mx-auto h-12 w-12 text-primary mb-4" />
             ) : (
               <UserCog className="mx-auto h-12 w-12 text-primary mb-4" />
             )}
             <CardTitle className="text-2xl font-bold">
-              {isPlatformLogin ? "Plataforma • Gestão de Contratos" : "Acesso Administrativo"}
+              {isPlatformLogin ? "Plataforma • Gestão de Contratos" : isInsideContract && ministry ? ministry.display_name || ministry.name : "Acesso Administrativo"}
             </CardTitle>
             <CardDescription>
               {isPlatformLogin
