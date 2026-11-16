@@ -1,3 +1,4 @@
+import { useContractModuleData } from "@/platform/useContractModuleData";
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,37 +30,8 @@ interface ChurchUnit {
   status: "Ativa" | "Em implantação";
 }
 
-const DEFAULT_MEMBERS: ChurchMember[] = [
-  {
-    id: "mb-1",
-    name: "Carlos Henrique Silva",
-    role: "Diácono",
-    congregation: "Igreja Sede",
-    status: "Ativo",
-    phone: "(11) 99123-4567",
-  },
-  {
-    id: "mb-2",
-    name: "Maria Aparecida Souza",
-    role: "Membro / Professora EBD",
-    congregation: "Igreja Sede",
-    status: "Ativo",
-    phone: "(11) 98456-1234",
-  },
-  {
-    id: "mb-3",
-    name: "Lucas Ferreira Lima",
-    role: "Auxiliar",
-    congregation: "Congregação Central",
-    status: "Congregado",
-    phone: "(11) 97234-8899",
-  },
-];
-
-const DEFAULT_UNITS: ChurchUnit[] = [
-  { id: "un-1", code: "1", name: "Templo Sede", hierarchy: "Igreja Sede", city: "São Paulo - SP", status: "Ativa" },
-  { id: "un-2", code: "2", name: "Congregação Central", hierarchy: "Congregação", city: "São Paulo - SP", status: "Ativa" },
-];
+const DEFAULT_MEMBERS: ChurchMember[] = [];
+const DEFAULT_UNITS: ChurchUnit[] = [];
 
 export const ChurchSecretariatPreview = ({
   contractId,
@@ -72,26 +44,8 @@ export const ChurchSecretariatPreview = ({
   activeSection?: SecretariatSection;
   onChangeSection?: (s: SecretariatSection) => void;
 }) => {
-  const storageKey = `church_secretariat_${contractId}`;
-  const unitsKey = `church_secretariat_units_${contractId}`;
-
-  const [members, setMembers] = useState<ChurchMember[]>(() => {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      return raw ? JSON.parse(raw) : DEFAULT_MEMBERS;
-    } catch {
-      return DEFAULT_MEMBERS;
-    }
-  });
-
-  const [units, setUnits] = useState<ChurchUnit[]>(() => {
-    try {
-      const raw = localStorage.getItem(unitsKey);
-      return raw ? JSON.parse(raw) : DEFAULT_UNITS;
-    } catch {
-      return DEFAULT_UNITS;
-    }
-  });
+  const { value: members, update: setMembers, loading: membersLoading, error: membersError } = useContractModuleData(contractId, "church_members", DEFAULT_MEMBERS);
+  const { value: units, update: setUnits, loading: unitsLoading, error: unitsError } = useContractModuleData(contractId, "church_units", DEFAULT_UNITS);
 
   const [search, setSearch] = useState("");
   const [name, setName] = useState("");
@@ -102,22 +56,6 @@ export const ChurchSecretariatPreview = ({
   const [unitName, setUnitName] = useState("");
   const [unitCity, setUnitCity] = useState("");
   const [unitHier, setUnitHier] = useState<ChurchUnit["hierarchy"]>("Congregação");
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(members));
-    } catch {
-      // ignore
-    }
-  }, [members, storageKey]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(unitsKey, JSON.stringify(units));
-    } catch {
-      // ignore
-    }
-  }, [units, unitsKey]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -165,6 +103,8 @@ export const ChurchSecretariatPreview = ({
     setUnitCity("");
   };
 
+  if (membersLoading || unitsLoading) return <p className="p-6 text-muted-foreground">Carregando dados…</p>;
+  if (membersError || unitsError) return <p role="alert" className="p-6 text-destructive">{membersError || unitsError}</p>;
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <Tabs

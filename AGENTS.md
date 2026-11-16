@@ -3,6 +3,7 @@
 - Reuse the supplied platform symbol through its asset pointer and a shared PlatformBrand component to keep platform header and login consistent.
 - Supabase is the authoritative store for contracts, memberships and requests; browser storage is only an explicit legacy import source.
 - Account credential changes use Supabase Auth on the existing user ID so roles and contract affiliations survive email changes.
+- Non-EBD module data uses contract/module keyed Supabase records with RLS and revision-checked writes to avoid cross-contract access and concurrent overwrites.
 - Friendly links resolve to immutable contract IDs before membership checks; public directory preferences are projected by protected triggers and IDs remain valid legacy links.
 - Shared contract link helpers produce published portal/login URLs; address uniqueness is enforced in the database to prevent client-link ambiguity.
 - Contract memberships are separate from EBD hierarchical roles; contract access never replaces existing congregation/class RLS.
