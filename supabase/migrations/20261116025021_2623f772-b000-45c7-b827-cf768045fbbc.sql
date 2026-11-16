@@ -1,0 +1,7 @@
+DO $$ DECLARE mid uuid; BEGIN
+IF NOT EXISTS (SELECT 1 FROM public.platform_contracts WHERE id='ctr-002-igreja-modelo') THEN
+INSERT INTO public.ministries(name,display_name,city) VALUES('Igreja Esperança (Modelo Igreja Completa)','Igreja Esperança (Modelo Igreja Completa)','São Paulo - SP') RETURNING id INTO mid;
+INSERT INTO public.platform_contracts(id,code,ministry_id,data) VALUES('ctr-002-igreja-modelo','DEMO-IGREJA',mid,jsonb_build_object('clientName','Igreja Esperança (Modelo Igreja Completa)','segment','igreja','status','demonstracao','activeModules',jsonb_build_array('igreja_ebd','igreja_tesouraria','igreja_secretaria'),'city','São Paulo - SP','responsibleName','Pr. Marcos Oliveira','responsibleEmail','secretaria@igrejaesperanca.demo','planName','Igreja Completa (EBD + Tesouraria + Secretaria)','monthlyValue',499,'branding','{}'::jsonb)); END IF;
+IF NOT EXISTS (SELECT 1 FROM public.platform_contracts WHERE id='ctr-003-comercio-modelo') THEN
+INSERT INTO public.platform_contracts(id,code,data) VALUES('ctr-003-comercio-modelo','DEMO-COMERCIO',jsonb_build_object('clientName','Comercial Horizonte Ltda (Modelo Comércio)','segment','comercio','status','demonstracao','activeModules',jsonb_build_array('comercio_tesouraria','comercio_secretaria','comercio_estoque','comercio_rh','comercio_pdv'),'city','Belo Horizonte - MG','responsibleName','Juliana Mendes','responsibleEmail','gestao@comercialhorizonte.demo','planName','Comércio Full (Financeiro + Estoque + RH + PDV)','monthlyValue',590,'branding','{}'::jsonb)); END IF;
+END $$;
