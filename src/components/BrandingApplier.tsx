@@ -17,7 +17,7 @@ export const BrandingApplier = () => {
     const root = document.documentElement;
     const isPlatformRoute = pathname === "/" || pathname.startsWith("/plataforma");
     const contractMatch = pathname.match(/^\/c\/([^/]+)/);
-    const activeContract = contractMatch ? contracts.find((c) => c.id === contractMatch[1]) : undefined;
+    const activeContract = contractMatch ? contracts.find((c) => c.id === contractMatch[1] || c.slug === contractMatch[1]) : undefined;
     const isNonChurchContract = activeContract && activeContract.segment !== "igreja";
 
     const hsl =

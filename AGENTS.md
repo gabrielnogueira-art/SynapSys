@@ -1,5 +1,7 @@
 ## Platform rules
 - Supabase is the authoritative store for contracts, memberships and requests; browser storage is only an explicit legacy import source.
+- Friendly links resolve to immutable contract IDs before membership checks; public directory preferences are projected by protected triggers and IDs remain valid legacy links.
+- Shared contract link helpers produce published portal/login URLs; address uniqueness is enforced in the database to prevent client-link ambiguity.
 - Contract memberships are separate from EBD hierarchical roles; contract access never replaces existing congregation/class RLS.
 - Public contract resolution exposes branding and enabled modules only; billing and user directories require authenticated scoped access.
 - Client simulation changes presentation only and never grants permissions; database authorization uses the real authenticated identity.

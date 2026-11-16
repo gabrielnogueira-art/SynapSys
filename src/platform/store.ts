@@ -7,6 +7,7 @@ import {
 } from "@/contracts/registry";
 import { ChangeRequest, ContractStatus, ModuleId, PlatformContract, PlatformUser, ProjectSegment } from "./types";
 import { slugifyContractFolder } from "./catalog";
+import { contractEntryPath, normalizeContractSlug, validateContractSlug } from "./contractLinks";
 
 const db = supabase as any;
 const LEGACY_KEY = "gestao_plataforma_hub_v1";
@@ -84,6 +85,8 @@ export interface PlatformState {
 }
 
 export interface NewContractInput {
+  slug?: string;
+  requireLoginOnEntry?: boolean;
   clientName: string;
   segment: ProjectSegment;
   status: ContractStatus;
@@ -106,7 +109,7 @@ const rowToContract = (r: any, publicOnly = false): PlatformContract => ({
   id: r.id,
   code: r.code ?? r.data?.code,
   codeFolder: `src/contracts/${r.id}`,
-  entryPath: `/c/${r.id}`,
+  entryPath: contractEntryPath({ id: r.id, slug: r.data?.slug }),
   authSource: "supabase",
   supabaseMinistryId: publicOnly ? undefined : r.ministry_id,
   isReferenceExample: r.id === "ctr-001-ebd-exemplo",
@@ -220,7 +223,7 @@ function init() {
 }
 
 export function getContractById(contractId: string) {
-  return snapshot.contracts.find((c) => c.id === contractId);
+  return snapshot.contracts.find((c) => c.id === contractId || c.slug === contractId);
 }
 
 const check = (res: { error: any }) => { if (res.error) throw new Error(res.error.message); };
@@ -259,10 +262,13 @@ export function usePlatformStore() {
   const done = async () => reloadPlatformStore();
 
   const addContract = async (input: NewContractInput): Promise<PlatformContract> => {
+    if (!(await isCurrentUserSupabaseMaster())) throw new Error("Entre com a conta Master para criar contratos.");
+    const slug = validateContractSlug(input.slug || normalizeContractSlug(input.clientName));
     const nextNum = snapshot.contracts.reduce((max, c) => Math.max(max, parseInt(c.code.match(/(\d+)/)?.[1] ?? "0", 10)), 0) + 1;
     const code = `CTR-${String(nextNum).padStart(3, "0")}`;
     const id = slugifyContractFolder(code, input.clientName);
     const data = {
+      slug, requireLoginOnEntry: input.requireLoginOnEntry ?? false,
       clientName: input.clientName.trim(), segment: input.segment, status: input.status, activeModules: input.activeModules,
       city: input.city?.trim() || undefined, responsibleName: input.responsibleName?.trim() || undefined,
       responsibleEmail: input.responsibleEmail?.trim() || undefined, planName: input.planName?.trim() || undefined,
@@ -281,7 +287,7 @@ export function usePlatformStore() {
       id,
       code,
       codeFolder: `src/contracts/${id}`,
-      entryPath: `/c/${id}`,
+      entryPath: contractEntryPath({ id, slug }),
       authSource: "local",
       createdAt: new Date().toISOString().slice(0, 10),
     };
@@ -310,6 +316,8 @@ export function usePlatformStore() {
   };
 
   const updateContract = async (contractId: string, patch: Partial<PlatformContract>) => {
+    if (!(await isCurrentUserSupabaseMaster())) throw new Error("Entre com a conta Master para editar contratos.");
+    if (patch.slug) patch = { ...patch, slug: validateContractSlug(patch.slug) };
     const current = getContractById(contractId);
     if (!current) throw new Error("Contrato não encontrado");
     if (await isCurrentUserSupabaseMaster()) {

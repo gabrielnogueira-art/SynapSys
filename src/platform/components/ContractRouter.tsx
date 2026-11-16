@@ -18,6 +18,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { PlatformUsersTab } from "./PlatformUsersTab";
 import { ContractModulesDialog } from "./ContractModulesDialog";
 import { canAccessContract, useViewerSession } from "@/platform/session";
+import { shouldRequireEntryLogin } from "@/platform/contractLinks";
 
 function WithBanner({
   contract,
@@ -42,11 +43,11 @@ export const ContractRouter = () => {
   const { contractId } = useParams<{ contractId: string }>();
   const store = usePlatformStore();
   const { contracts, loading, error } = store;
-  const access = useContractAccess(contractId);
+  const contract = contracts.find((c) => c.id === contractId || c.slug === contractId);
+  const access = useContractAccess(contract?.id);
   const role = useUserRole();
   const location = useLocation();
   const session = useViewerSession();
-  const contract = contracts.find((c) => c.id === contractId);
 
   if (loading) return <div className="p-8 text-muted-foreground">Carregando contrato…</div>;
   if (error) return <div className="p-8" role="alert">{error}</div>;
@@ -90,7 +91,7 @@ export const ContractRouter = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link to={`/c/${session.contractId}`}>
+            <Link to={session.mode === "client" ? `/c/${session.contractId}` : "/plataforma"}>
               <Button className="w-full">
                 <ArrowLeft className="h-4 w-4 mr-2" /> Voltar ao Meu Sistema
               </Button>
@@ -132,6 +133,11 @@ export const ContractRouter = () => {
   }
 
   const EntryComponent = CONTRACT_COMPONENTS[contract.id] ?? GenericContractEntry;
+  const entry = access.loading || role.loading ? (
+    <div className="p-8 text-muted-foreground">Verificando acesso…</div>
+  ) : shouldRequireEntryLogin(contract.requireLoginOnEntry, access.signedIn) ? (
+    <Navigate to={`${contract.entryPath}/login`} replace />
+  ) : <EntryComponent contract={contract} />;
 
   return (
     <Routes>
@@ -184,7 +190,7 @@ export const ContractRouter = () => {
           )
         }
       />
-      <Route index element={<EntryComponent contract={contract} />} />
+      <Route index element={entry} />
       <Route
         path="form"
         element={
@@ -233,7 +239,7 @@ export const ContractRouter = () => {
           </WithBanner>
         }
       />
-      <Route path="*" element={<EntryComponent contract={contract} />} />
+      <Route path="*" element={entry} />
     </Routes>
   );
 };
