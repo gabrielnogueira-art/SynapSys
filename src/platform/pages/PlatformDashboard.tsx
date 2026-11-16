@@ -44,6 +44,8 @@ import {
 import { ContractStatus, PlatformContract, ProjectSegment } from "@/platform/types";
 import { NewContractDialog } from "@/platform/components/NewContractDialog";
 import { ContractModulesDialog } from "@/platform/components/ContractModulesDialog";
+import { ContractLinkMenu } from "@/platform/components/ContractLinkMenu";
+import { contractPublicUrl } from "@/platform/contractLinks";
 import { PlatformUsersTab } from "@/platform/components/PlatformUsersTab";
 import { PlatformRequestsTab } from "@/platform/components/PlatformRequestsTab";
 import { PlatformCatalogTab } from "@/platform/components/PlatformCatalogTab";
@@ -496,6 +498,11 @@ export const PlatformDashboard = () => {
                           {contract.notes}
                         </p>
                       )}
+
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground break-all">{contractPublicUrl(contract)}</p>
+                        <ContractLinkMenu contract={contract} />
+                      </div>
 
                       {/* Ações */}
                       <div className="flex flex-wrap gap-2 pt-1">

@@ -35,7 +35,7 @@ export function useBranding() {
   const { pathname } = useLocation();
   const store = usePlatformStore();
   const id = pathname.match(/^\/c\/([^/]+)/)?.[1];
-  const contract = store.contracts.find((c) => c.id === id);
+  const contract = store.contracts.find((c) => c.id === id || c.slug === id);
   const [ministry, setMinistry] = useState<MinistryBranding | null>(null);
   const [loading, setLoading] = useState(true);
   const [key, setKey] = useState(0);

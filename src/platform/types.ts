@@ -51,6 +51,8 @@ export interface PlatformContract {
   codeFolder: string;
   /** Rota base de entrada na plataforma */
   entryPath: string;
+  slug?: string;
+  requireLoginOnEntry?: boolean;
   city?: string;
   responsibleName?: string;
   responsibleEmail?: string;
