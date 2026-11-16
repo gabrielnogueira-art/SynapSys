@@ -1,3 +1,7 @@
+# SynapSys identity
+- [ ] Apply the supplied brand to platform screens and platform login, retaining EBD/client themes.
+- [ ] Reuse the supplied symbol, update favicon and page metadata, and verify desktop/mobile display.
+
 # Security remediation
 - [x] Restrict system settings to approved users and Master.
 - [x] Remove obsolete public branding storage read policy.
