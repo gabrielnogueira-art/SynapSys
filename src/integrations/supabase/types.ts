@@ -348,6 +348,38 @@ export type Database = {
           },
         ]
       }
+      platform_module_data: {
+        Row: {
+          contract_id: string
+          created_at: string
+          data: Json
+          module_key: string
+          updated_at: string
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          data: Json
+          module_key: string
+          updated_at?: string
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          data?: Json
+          module_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_module_data_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "platform_contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_requests: {
         Row: {
           contract_id: string
