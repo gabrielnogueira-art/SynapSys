@@ -20,6 +20,79 @@ export type ContractStatus =
   | "demonstracao"
   | "suspenso";
 
+export type ContractLegalStatus =
+  | "em_elaboracao"
+  | "aguardando_assinatura"
+  | "ativo"
+  | "suspenso_atraso"
+  | "cancelado";
+
+export interface PricingTier {
+  id: string;
+  segment: ProjectSegment;
+  name: string;
+  minUnits: number;
+  maxUnits: number | null;
+  /** Preço unitário por igreja / unidade individual */
+  unitPrice: number;
+  description?: string;
+}
+
+export interface ContractClauseTemplate {
+  id: string;
+  order: number;
+  title: string;
+  body: string;
+}
+
+export type InvoicePaymentMethod =
+  | "asaas"
+  | "cora"
+  | "nubank_boleto"
+  | "pix"
+  | "cartao"
+  | "dinheiro"
+  | "transferencia"
+  | "outro";
+
+export type InvoiceStatus = "pendente" | "pago" | "cancelado";
+
+export interface ContractInvoice {
+  id: string;
+  /** Competência no formato YYYY-MM (ex.: 2026-11) */
+  competence: string;
+  /** Vencimento no formato YYYY-MM-DD */
+  dueDate: string;
+  amount: number;
+  status: InvoiceStatus;
+  provider: InvoicePaymentMethod;
+  paymentUrl?: string;
+  paymentCode?: string;
+  paidAt?: string;
+  paidAmount?: number;
+  paidMethod?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface ContractActivityEntry {
+  id: string;
+  at: string;
+  type: "contrato" | "plano" | "cobranca" | "status";
+  summary: string;
+}
+
+export interface PlatformBillingConfig {
+  preferredProvider: "manual_nubank_cora" | "asaas" | "cora";
+  gracePeriodDays: number;
+  pixKey?: string;
+  beneficiaryName?: string;
+  contractorDocument?: string;
+  contractorCity?: string;
+  supportContact?: string;
+  paymentInstructions?: string;
+}
+
 export type AuthSource = "supabase" | "local";
 
 export interface SegmentDefinition {
@@ -58,6 +131,17 @@ export interface PlatformContract {
   responsibleEmail?: string;
   planName?: string;
   monthlyValue?: number;
+  legalName?: string;
+  documentNumber?: string;
+  address?: string;
+  unitsCount?: number;
+  billingDueDay?: number;
+  contractStartDate?: string;
+  adjustmentIndex?: string;
+  contractLegalStatus?: ContractLegalStatus;
+  customClauses?: ContractClauseTemplate[];
+  invoices?: ContractInvoice[];
+  activityLog?: ContractActivityEntry[];
   authSource: AuthSource;
   supabaseMinistryId?: string | null;
   isReferenceExample?: boolean;

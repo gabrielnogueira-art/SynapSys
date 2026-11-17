@@ -1,12 +1,20 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import {
   ChangeRequest,
+  ContractActivityEntry,
+  ContractClauseTemplate,
+  ContractInvoice,
+  ContractLegalStatus,
   ContractStatus,
+  InvoicePaymentMethod,
   ModuleId,
   PendingAccessRequest,
+  PlatformBillingConfig,
   PlatformContract,
   PlatformUser,
+  PricingTier,
   ProjectSegment,
   UserAccessLevel,
 } from "./types";
@@ -21,10 +29,33 @@ import {
   validateContractSlug,
   validatePublicAppOrigin,
 } from "./contractLinks";
+import {
+  buildDueDateForCompetence,
+  DEFAULT_BILLING_CONFIG,
+  DEFAULT_CONTRACT_CLAUSES,
+  DEFAULT_PRICING_TIERS,
+  normalizeBillingConfig,
+  normalizeClauseTemplates,
+  normalizePricingTiers,
+  roundCurrency,
+  todayIsoDate,
+} from "./saasDefaults";
 
-const db = supabase as any;
 const LEGACY_KEY = "gestao_plataforma_hub_v1";
 const STORE_EVENT = "platform-store-updated";
+
+interface ContractRowShape {
+  id?: string | null;
+  code?: string | null;
+  ministry_id?: string | null;
+  created_at?: string | null;
+  data?: Json | null;
+}
+
+const asRecord = (val: unknown): Record<string, unknown> =>
+  val && typeof val === "object" && !Array.isArray(val)
+    ? (val as Record<string, unknown>)
+    : {};
 
 interface LocalFallbackStore {
   contracts: PlatformContract[];
@@ -57,7 +88,7 @@ async function isCurrentUserSupabaseMaster(): Promise<boolean> {
   const { data: sessionData } = await supabase.auth.getSession();
   const uid = sessionData.session?.user?.id;
   if (!uid) return false;
-  const { data } = await db
+  const { data } = await supabase
     .from("user_roles")
     .select("role")
     .eq("user_id", uid)
@@ -71,6 +102,9 @@ export interface PlatformState {
   users: PlatformUser[];
   pendingRequests: PendingAccessRequest[];
   changeRequests: ChangeRequest[];
+  pricingTiers: PricingTier[];
+  clauseTemplates: ContractClauseTemplate[];
+  billingConfig: PlatformBillingConfig;
   loading: boolean;
   error: string | null;
 }
@@ -87,25 +121,51 @@ export interface NewContractInput {
   responsibleEmail?: string;
   planName?: string;
   monthlyValue?: number;
+  legalName?: string;
+  documentNumber?: string;
+  address?: string;
+  unitsCount?: number;
+  billingDueDay?: number;
+  contractStartDate?: string;
+  adjustmentIndex?: string;
+  contractLegalStatus?: ContractLegalStatus;
   notes?: string;
 }
 
-let snapshot: PlatformState = { contracts: [], users: [], pendingRequests: [], changeRequests: [], loading: true, error: null };
+let snapshot: PlatformState = {
+  contracts: [],
+  users: [],
+  pendingRequests: [],
+  changeRequests: [],
+  pricingTiers: DEFAULT_PRICING_TIERS,
+  clauseTemplates: DEFAULT_CONTRACT_CLAUSES,
+  billingConfig: DEFAULT_BILLING_CONFIG,
+  loading: true,
+  error: null,
+};
 const listeners = new Set<(s: PlatformState) => void>();
 let inflight: Promise<void> | null = null;
 const emit = (s: PlatformState) => { snapshot = s; listeners.forEach((l) => l(s)); };
 
-const rowToContract = (r: any, publicOnly = false): PlatformContract => ({
-  ...(r.data ?? {}),
-  id: r.id,
-  code: r.code ?? r.data?.code,
-  codeFolder: `src/contracts/${r.id}`,
-  entryPath: contractEntryPath({ id: r.id, slug: r.data?.slug }),
-  authSource: "supabase",
-  supabaseMinistryId: publicOnly ? undefined : r.ministry_id,
-  isReferenceExample: r.id === "ctr-001-ebd-exemplo",
-  createdAt: String(r.created_at ?? r.data?.createdAt ?? "").slice(0, 10),
-});
+const rowToContract = (r: ContractRowShape, publicOnly = false): PlatformContract => {
+  const raw = asRecord(r.data) as Partial<PlatformContract>;
+  const id = String(r.id ?? raw.id ?? "");
+  return {
+    ...raw,
+    id,
+    code: String(r.code ?? raw.code ?? id),
+    clientName: String(raw.clientName ?? ""),
+    segment: raw.segment === "comercio" ? "comercio" : "igreja",
+    status: raw.status ?? "ativo",
+    activeModules: Array.isArray(raw.activeModules) ? raw.activeModules : [],
+    codeFolder: `src/contracts/${id}`,
+    entryPath: contractEntryPath({ id, slug: raw.slug }),
+    authSource: "supabase",
+    supabaseMinistryId: publicOnly ? undefined : r.ministry_id,
+    isReferenceExample: id === "ctr-001-ebd-exemplo",
+    createdAt: String(r.created_at ?? raw.createdAt ?? "").slice(0, 10),
+  };
+};
 
 export async function reloadPlatformStore() {
   if (inflight) return inflight;
@@ -115,58 +175,82 @@ export async function reloadPlatformStore() {
       const uid = session.session?.user?.id;
       const map = new Map<string, PlatformContract>();
 
-      const addPublic = (rows: any[] | null) =>
-        (rows ?? []).forEach((r: any) =>
-          map.set(r.id, rowToContract({ ...r, code: r.data?.code }, true))
-        );
+      const addPublic = (rows: ContractRowShape[] | null) =>
+        (rows ?? []).forEach((r) => {
+          if (!r.id) return;
+          const d = asRecord(r.data);
+          map.set(
+            r.id,
+            rowToContract({ ...r, code: typeof d.code === "string" ? d.code : undefined }, true)
+          );
+        });
       if (uid) {
-        const pub = await db.from("platform_contract_directory").select("id,data,created_at");
+        const pub = await supabase.from("platform_contract_directory").select("id,data,created_at");
         if (!pub.error) addPublic(pub.data);
       }
-      const linkKey = typeof window !== "undefined"
-        ? decodeURIComponent(window.location.pathname.match(/^\/c\/([^/]+)/)?.[1] ?? "")
-        : "";
+      const linkKey =
+        typeof window !== "undefined"
+          ? decodeURIComponent(window.location.pathname.match(/^\/c\/([^/]+)/)?.[1] ?? "")
+          : "";
       if (linkKey) {
-        const one = await db.rpc("resolve_contract_directory", { _key: linkKey });
+        const one = await supabase.rpc("resolve_contract_directory", { _key: linkKey });
         if (!one.error) addPublic(one.data);
       }
 
       let users: PlatformUser[] = [];
       let pendingRequests: PendingAccessRequest[] = [];
       let changeRequests: ChangeRequest[] = [];
-
+      let pricingTiers = snapshot.pricingTiers;
+      let clauseTemplates = snapshot.clauseTemplates;
+      let billingConfig = snapshot.billingConfig;
 
       if (session.session && uid) {
         const [c, m, q, masterRow, p] = await Promise.all([
-          db.from("platform_contracts").select("*"),
-          db.from("platform_memberships").select("*"),
-          db.from("platform_requests").select("*").order("created_at", { ascending: false }),
-          db.from("user_roles").select("role").eq("user_id", uid).eq("role", "master").maybeSingle(),
-          db.from("pending_users").select("*").eq("status", "pending").order("created_at", { ascending: false }),
+          supabase.from("platform_contracts").select("*"),
+          supabase.from("platform_memberships").select("*"),
+          supabase.from("platform_requests").select("*").order("created_at", { ascending: false }),
+          supabase.from("user_roles").select("role").eq("user_id", uid).eq("role", "master").maybeSingle(),
+          supabase.from("pending_users").select("*").eq("status", "pending").order("created_at", { ascending: false }),
         ]);
         if (!masterRow.error && masterRow.data) {
-          const originRes = await db
+          const settingsRes = await supabase
             .from("system_settings")
-            .select("value")
-            .eq("key", "platform_public_origin")
-            .maybeSingle();
-          if (!originRes.error && originRes.data?.value) {
-            setPlatformOriginConfig(normalizeOriginConfig(originRes.data.value));
+            .select("key, value")
+            .in("key", [
+              "platform_public_origin",
+              "platform_pricing_tiers",
+              "platform_contract_clauses",
+              "platform_billing_config",
+            ]);
+          if (!settingsRes.error && Array.isArray(settingsRes.data)) {
+            for (const row of settingsRes.data) {
+              if (row.key === "platform_public_origin" && row.value) {
+                setPlatformOriginConfig(normalizeOriginConfig(row.value));
+              } else if (row.key === "platform_pricing_tiers") {
+                pricingTiers = normalizePricingTiers(row.value);
+              } else if (row.key === "platform_contract_clauses") {
+                clauseTemplates = normalizeClauseTemplates(row.value);
+              } else if (row.key === "platform_billing_config") {
+                billingConfig = normalizeBillingConfig(row.value);
+              }
+            }
           }
         }
         if (!c.error) {
-          (c.data ?? []).forEach((r: any) => map.set(r.id, rowToContract(r)));
+          (c.data ?? []).forEach((r) => map.set(r.id, rowToContract(r)));
         }
         if (!m.error) {
-          users = (m.data ?? []).map((r: any) => {
+          users = (m.data ?? []).map((r) => {
+            const d = asRecord(r.data);
             const ctr = map.get(r.contract_id);
-            const emailLower = String(r.data?.email || "").toLowerCase();
+            const emailStr = typeof d.email === "string" ? d.email : "";
+            const emailLower = emailStr.toLowerCase();
             const overrideModules =
               ctr?.memberModuleOverrides?.[r.id] ??
               (emailLower ? ctr?.memberModuleOverrides?.[emailLower] : undefined);
             const allowedModules =
-              Array.isArray(r.data?.allowedModules) && r.data.allowedModules.length > 0
-                ? (r.data.allowedModules as ModuleId[])
+              Array.isArray(d.allowedModules) && d.allowedModules.length > 0
+                ? (d.allowedModules as ModuleId[])
                 : Array.isArray(overrideModules) && overrideModules.length > 0
                 ? overrideModules
                 : undefined;
@@ -174,28 +258,28 @@ export async function reloadPlatformStore() {
               ctr?.memberModuleLevelOverrides?.[r.id] ??
               (emailLower ? ctr?.memberModuleLevelOverrides?.[emailLower] : undefined);
             const moduleLevels =
-              r.data?.moduleLevels && typeof r.data.moduleLevels === "object"
-                ? (r.data.moduleLevels as Partial<Record<ModuleId, string>>)
+              d.moduleLevels && typeof d.moduleLevels === "object"
+                ? (d.moduleLevels as Partial<Record<ModuleId, string>>)
                 : overrideLevels;
             return {
               id: r.id,
-              name: r.data?.name || r.data?.email || "Usuário",
-              email: r.data?.email || "",
+              name: (typeof d.name === "string" && d.name) || emailStr || "Usuário",
+              email: emailStr,
               contractId: r.contract_id,
-              roleLabel: r.data?.roleLabel || r.access_level,
-              accessLevel: r.access_level,
+              roleLabel: (typeof d.roleLabel === "string" && d.roleLabel) || r.access_level,
+              accessLevel: r.access_level as UserAccessLevel,
               authSource: "supabase" as const,
-              status: r.status,
+              status: (r.status === "pendente" || r.status === "bloqueado" ? r.status : "ativo") as PlatformUser["status"],
               allowedModules,
               moduleLevels,
-              ebdAdmin: typeof r.data?.ebdAdmin === "boolean" ? r.data.ebdAdmin : r.access_level === "gestor_contrato",
-              notes: r.data?.notes,
+              ebdAdmin: typeof d.ebdAdmin === "boolean" ? d.ebdAdmin : r.access_level === "gestor_contrato",
+              notes: typeof d.notes === "string" ? d.notes : undefined,
               createdAt: String(r.created_at).slice(0, 10),
             };
           });
         }
         if (!p.error) {
-          pendingRequests = (p.data ?? []).map((r: any) => ({
+          pendingRequests = (p.data ?? []).map((r) => ({
             id: r.id,
             userId: r.user_id ?? null,
             email: r.email,
@@ -203,25 +287,45 @@ export async function reloadPlatformStore() {
             contractId: r.contract_id ?? null,
             requestedArea: r.requested_area ?? null,
             notes: r.notes ?? null,
-            status: r.status,
+            status: (r.status === "approved" || r.status === "rejected" ? r.status : "pending") as PendingAccessRequest["status"],
             createdAt: String(r.created_at).slice(0, 10),
           }));
         }
         if (!q.error) {
-          changeRequests = (q.data ?? []).map((r: any) => ({
-            ...r.data,
-            id: r.id,
-            contractId: r.contract_id,
-            createdAt: String(r.created_at).slice(0, 10),
-          }));
+          changeRequests = (q.data ?? []).map((r) => {
+            const d = asRecord(r.data) as Partial<ChangeRequest>;
+            return {
+              title: String(d.title ?? ""),
+              description: String(d.description ?? ""),
+              targetModule: d.targetModule ?? "geral",
+              status: d.status ?? "solicitado",
+              id: r.id,
+              contractId: r.contract_id,
+              createdAt: String(r.created_at).slice(0, 10),
+            };
+          });
         }
       }
 
       const contracts = [...map.values()].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
-      emit({ contracts, users, pendingRequests, changeRequests, loading: false, error: null });
-    } catch (e: any) {
+      emit({
+        contracts,
+        users,
+        pendingRequests,
+        changeRequests,
+        pricingTiers,
+        clauseTemplates,
+        billingConfig,
+        loading: false,
+        error: null,
+      });
+    } catch (e: unknown) {
       console.error("[Plataforma] Falha ao carregar dados:", e);
-      emit({ ...snapshot, loading: false, error: e?.message ?? "Falha ao carregar a plataforma" });
+      emit({
+        ...snapshot,
+        loading: false,
+        error: e instanceof Error ? e.message : "Falha ao carregar a plataforma",
+      });
     } finally { inflight = null; }
   })();
   return inflight;
@@ -240,16 +344,32 @@ export function getContractById(contractId: string) {
   return snapshot.contracts.find((c) => c.id === contractId || c.slug === contractId);
 }
 
-const check = (res: { error: any }) => { if (res.error) throw new Error(res.error.message); };
-const contractData = (c: Partial<PlatformContract>) => {
-  const { id, code, codeFolder, entryPath, authSource, supabaseMinistryId, isReferenceExample, createdAt, ...data } = c as any;
-  return data;
+const check = (res: { error: { message: string } | null }) => {
+  if (res.error) throw new Error(res.error.message);
+};
+const contractData = (c: Partial<PlatformContract>): Json => {
+  const {
+    id: _id,
+    code: _code,
+    codeFolder: _codeFolder,
+    entryPath: _entryPath,
+    authSource: _authSource,
+    supabaseMinistryId: _ministryId,
+    isReferenceExample: _isRef,
+    createdAt: _createdAt,
+    ...data
+  } = c;
+  return data as unknown as Json;
 };
 async function callUsers(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("platform-users", { body });
   if (error) {
-    const ctx = await (error as any).context?.json?.().catch(() => null);
-    throw new Error(ctx?.error ?? error.message);
+    const errObj = error as {
+      message: string;
+      context?: { json?: () => Promise<{ error?: string } | null> };
+    };
+    const ctx = await errObj.context?.json?.().catch(() => null);
+    throw new Error(ctx?.error ?? errObj.message);
   }
   if (data?.error) throw new Error(data.error);
   return data;
@@ -265,7 +385,7 @@ export function usePlatformStore() {
   useEffect(() => {
     listeners.add(setState);
     setState(snapshot);
-    const ch = db.channel(`platform-${Math.random().toString(36).slice(2)}`)
+    const ch = supabase.channel(`platform-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "platform_contracts" }, () => reloadPlatformStore())
       .on("postgres_changes", { event: "*", schema: "public", table: "platform_memberships" }, () => reloadPlatformStore())
       .on("postgres_changes", { event: "*", schema: "public", table: "platform_requests" }, () => reloadPlatformStore())
@@ -274,6 +394,21 @@ export function usePlatformStore() {
   }, []);
 
   const done = async () => reloadPlatformStore();
+
+  const makeActivity = (
+    type: ContractActivityEntry["type"],
+    summary: string
+  ): ContractActivityEntry => ({
+    id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    at: new Date().toISOString(),
+    type,
+    summary,
+  });
+
+  const appendActivity = (
+    list: ContractActivityEntry[] | undefined,
+    entry: ContractActivityEntry
+  ): ContractActivityEntry[] => [entry, ...(list ?? [])].slice(0, 60);
 
   const addContract = async (input: NewContractInput): Promise<PlatformContract> => {
     if (!(await isCurrentUserSupabaseMaster())) throw new Error("Entre com a conta Master para criar contratos.");
@@ -286,9 +421,21 @@ export function usePlatformStore() {
       clientName: input.clientName.trim(), segment: input.segment, status: input.status, activeModules: input.activeModules,
       city: input.city?.trim() || undefined, responsibleName: input.responsibleName?.trim() || undefined,
       responsibleEmail: input.responsibleEmail?.trim() || undefined, planName: input.planName?.trim() || undefined,
-      monthlyValue: input.monthlyValue, notes: input.notes?.trim() || undefined, branding: {},
+      monthlyValue: input.monthlyValue,
+      legalName: input.legalName?.trim() || undefined,
+      documentNumber: input.documentNumber?.trim() || undefined,
+      address: input.address?.trim() || undefined,
+      unitsCount: input.unitsCount ?? 1,
+      billingDueDay: input.billingDueDay ?? 10,
+      contractStartDate: input.contractStartDate || todayIsoDate(),
+      adjustmentIndex: input.adjustmentIndex?.trim() || "IPCA",
+      contractLegalStatus:
+        input.contractLegalStatus || (input.status === "ativo" ? "ativo" : "em_elaboracao"),
+      invoices: [],
+      activityLog: [makeActivity("contrato", `Contrato ${code} criado (${input.unitsCount ?? 1} unidade(s))`)],
+      notes: input.notes?.trim() || undefined, branding: {},
     };
-    check(await db.rpc("create_platform_contract", { _id: id, _code: code, _data: data }));
+    check(await supabase.rpc("create_platform_contract", { _id: id, _code: code, _data: contractData(data) }));
     await done();
     const created = getContractById(id);
     if (!created) throw new Error("Contrato salvo; recarregue a lista para consultá-lo");
@@ -308,12 +455,31 @@ export function usePlatformStore() {
     }
     const current = getContractById(contractId);
     if (!current) throw new Error("Contrato não encontrado");
-    check(await db.from("platform_contracts").update({ data: contractData({ ...current, ...patch }) }).eq("id", contractId));
+    let nextActivityLog = patch.activityLog ?? current.activityLog;
+    if (!patch.activityLog) {
+      const notes: string[] = [];
+      if (patch.status && patch.status !== current.status) {
+        notes.push(`Status alterado: ${current.status} → ${patch.status}`);
+      }
+      if (patch.contractLegalStatus && patch.contractLegalStatus !== current.contractLegalStatus) {
+        notes.push(`Status contratual: ${patch.contractLegalStatus}`);
+      }
+      if (typeof patch.unitsCount === "number" && patch.unitsCount !== (current.unitsCount ?? 1)) {
+        notes.push(`Unidades: ${current.unitsCount ?? 1} → ${patch.unitsCount}`);
+      }
+      if (typeof patch.monthlyValue === "number" && patch.monthlyValue !== current.monthlyValue) {
+        notes.push(`Mensalidade atualizada para R$ ${patch.monthlyValue.toFixed(2)}`);
+      }
+      if (notes.length > 0) {
+        nextActivityLog = appendActivity(nextActivityLog, makeActivity("plano", notes.join(" • ")));
+      }
+    }
+    check(await supabase.from("platform_contracts").update({ data: contractData({ ...current, ...patch, activityLog: nextActivityLog }) }).eq("id", contractId));
     await done();
   };
   const deleteContract = async (contractId: string) => {
     await requireMaster();
-    check(await db.from("platform_contracts").delete().eq("id", contractId));
+    check(await supabase.from("platform_contracts").delete().eq("id", contractId));
     await done();
   };
   const addUser = async (input: Omit<PlatformUser, "id" | "createdAt"> & { password: string }) => {
@@ -344,7 +510,7 @@ export function usePlatformStore() {
           dirty = true;
         }
         if (dirty) {
-          await db
+          await supabase
             .from("platform_contracts")
             .update({ data: contractData(nextContract) })
             .eq("id", contract.id);
@@ -399,7 +565,7 @@ export function usePlatformStore() {
         if (input.email) delete nextLevelOverrides[input.email.toLowerCase()];
       }
       check(
-        await db
+        await supabase
           .from("platform_contracts")
           .update({
             data: contractData({
@@ -452,9 +618,9 @@ export function usePlatformStore() {
   const addChangeRequest = async (input: Omit<ChangeRequest, "id" | "createdAt" | "status">) => {
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) throw new Error("Entre para enviar solicitações.");
-    check(await db.from("platform_requests").insert({
+    check(await supabase.from("platform_requests").insert({
       contract_id: input.contractId, created_by: data.user.id,
-      data: { title: input.title, description: input.description, targetModule: input.targetModule, status: "solicitado" },
+      data: { title: input.title, description: input.description, targetModule: input.targetModule, status: "solicitado" } as unknown as Json,
     }));
     await done();
   };
@@ -462,13 +628,13 @@ export function usePlatformStore() {
     await requireMaster();
     const request = snapshot.changeRequests.find((r) => r.id === requestId);
     if (!request) throw new Error("Solicitação não encontrada");
-    const { id, contractId, createdAt, ...data } = request;
-    check(await db.from("platform_requests").update({ data: { ...data, status } }).eq("id", requestId));
+    const { id: _id, contractId: _contractId, createdAt: _createdAt, ...data } = request;
+    check(await supabase.from("platform_requests").update({ data: { ...data, status } as unknown as Json }).eq("id", requestId));
     await done();
   };
   const deleteChangeRequest = async (requestId: string) => {
     await requireMaster();
-    check(await db.from("platform_requests").delete().eq("id", requestId));
+    check(await supabase.from("platform_requests").delete().eq("id", requestId));
     await done();
   };
   const updatePlatformOrigin = async (next: PlatformOriginConfig) => {
@@ -478,16 +644,191 @@ export function usePlatformStore() {
         ? { mode: "manual", manualOrigin: validatePublicAppOrigin(next.manualOrigin ?? "") }
         : { mode: "auto", manualOrigin: null };
     check(
-      await db.from("system_settings").upsert(
+      await supabase.from("system_settings").upsert(
         {
           key: "platform_public_origin",
-          value: normalized,
+          value: normalized as unknown as Json,
           description: "Domínio base usado para gerar links públicos de contratos",
         },
         { onConflict: "key" }
       )
     );
     setPlatformOriginConfig(normalized);
+  };
+
+  const savePricingTiers = async (tiers: PricingTier[]) => {
+    await requireMaster();
+    const normalized = normalizePricingTiers(tiers);
+    check(
+      await supabase.from("system_settings").upsert(
+        {
+          key: "platform_pricing_tiers",
+          value: normalized as unknown as Json,
+          description: "Faixas de preço por unidade/igreja da plataforma SynapSys",
+        },
+        { onConflict: "key" }
+      )
+    );
+    emit({ ...snapshot, pricingTiers: normalized });
+    await done();
+  };
+
+  const saveClauseTemplates = async (clauses: ContractClauseTemplate[]) => {
+    await requireMaster();
+    const normalized = normalizeClauseTemplates(clauses);
+    check(
+      await supabase.from("system_settings").upsert(
+        {
+          key: "platform_contract_clauses",
+          value: normalized as unknown as Json,
+          description: "Modelo padrão de cláusulas contratuais SaaS da SynapSys",
+        },
+        { onConflict: "key" }
+      )
+    );
+    emit({ ...snapshot, clauseTemplates: normalized });
+    await done();
+  };
+
+  const saveBillingConfig = async (config: PlatformBillingConfig) => {
+    await requireMaster();
+    const normalized = normalizeBillingConfig(config);
+    check(
+      await supabase.from("system_settings").upsert(
+        {
+          key: "platform_billing_config",
+          value: normalized as unknown as Json,
+          description: "Configurações financeiras, PIX, carência e contratada SynapSys",
+        },
+        { onConflict: "key" }
+      )
+    );
+    emit({ ...snapshot, billingConfig: normalized });
+    await done();
+  };
+
+  const addContractInvoice = async (
+    contractId: string,
+    input: Omit<ContractInvoice, "id" | "createdAt">
+  ) => {
+    await requireMaster();
+    const current = getContractById(contractId);
+    if (!current) throw new Error("Contrato não encontrado");
+    const invoice: ContractInvoice = {
+      ...input,
+      amount: roundCurrency(input.amount),
+      id: `inv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      createdAt: todayIsoDate(),
+    };
+    const nextInvoices = [invoice, ...(current.invoices ?? [])].sort((a, b) =>
+      b.dueDate.localeCompare(a.dueDate)
+    );
+    const nextLog = appendActivity(
+      current.activityLog,
+      makeActivity(
+        "cobranca",
+        `Cobrança ${invoice.competence} emitida (R$ ${invoice.amount.toFixed(2)} • venc. ${invoice.dueDate})`
+      )
+    );
+    await updateContract(contractId, { invoices: nextInvoices, activityLog: nextLog });
+    return invoice;
+  };
+
+  const updateContractInvoice = async (
+    contractId: string,
+    invoiceId: string,
+    patch: Partial<ContractInvoice>,
+    activitySummary?: string
+  ) => {
+    await requireMaster();
+    const current = getContractById(contractId);
+    if (!current) throw new Error("Contrato não encontrado");
+    const nextInvoices = (current.invoices ?? []).map((inv) =>
+      inv.id === invoiceId
+        ? {
+            ...inv,
+            ...patch,
+            amount: patch.amount !== undefined ? roundCurrency(patch.amount) : inv.amount,
+            paidAmount:
+              patch.paidAmount !== undefined ? roundCurrency(patch.paidAmount) : inv.paidAmount,
+          }
+        : inv
+    );
+    const summary =
+      activitySummary ||
+      (patch.status === "pago"
+        ? `Pagamento registrado para fatura ${invoiceId}`
+        : `Cobrança ${invoiceId} atualizada`);
+    const nextLog = appendActivity(current.activityLog, makeActivity("cobranca", summary));
+    await updateContract(contractId, { invoices: nextInvoices, activityLog: nextLog });
+  };
+
+  const deleteContractInvoice = async (contractId: string, invoiceId: string) => {
+    await requireMaster();
+    const current = getContractById(contractId);
+    if (!current) throw new Error("Contrato não encontrado");
+    const removed = (current.invoices ?? []).find((inv) => inv.id === invoiceId);
+    const nextInvoices = (current.invoices ?? []).filter((inv) => inv.id !== invoiceId);
+    const nextLog = appendActivity(
+      current.activityLog,
+      makeActivity(
+        "cobranca",
+        `Cobrança ${removed?.competence ?? invoiceId} removida`
+      )
+    );
+    await updateContract(contractId, { invoices: nextInvoices, activityLog: nextLog });
+  };
+
+  const generateCompetenceInvoices = async (
+    competence: string,
+    provider: InvoicePaymentMethod
+  ): Promise<{ createdCount: number; skippedCount: number }> => {
+    await requireMaster();
+    let createdCount = 0;
+    let skippedCount = 0;
+    const targets = snapshot.contracts.filter(
+      (c) => c.status === "ativo" && typeof c.monthlyValue === "number" && c.monthlyValue > 0
+    );
+    for (const current of targets) {
+      const existing = (current.invoices ?? []).some(
+        (inv) => inv.competence === competence && inv.status !== "cancelado"
+      );
+      if (existing) {
+        skippedCount += 1;
+        continue;
+      }
+      const dueDate = buildDueDateForCompetence(competence, current.billingDueDay ?? 10);
+      const invoice: ContractInvoice = {
+        id: `inv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        competence,
+        dueDate,
+        amount: roundCurrency(current.monthlyValue ?? 0),
+        status: "pendente",
+        provider,
+        createdAt: todayIsoDate(),
+      };
+      const nextInvoices = [invoice, ...(current.invoices ?? [])].sort((a, b) =>
+        b.dueDate.localeCompare(a.dueDate)
+      );
+      const nextLog = appendActivity(
+        current.activityLog,
+        makeActivity(
+          "cobranca",
+          `Mensalidade ${competence} gerada em lote (R$ ${invoice.amount.toFixed(2)})`
+        )
+      );
+      check(
+        await supabase
+          .from("platform_contracts")
+          .update({
+            data: contractData({ ...current, invoices: nextInvoices, activityLog: nextLog }),
+          })
+          .eq("id", current.id)
+      );
+      createdCount += 1;
+    }
+    await done();
+    return { createdCount, skippedCount };
   };
 
   /** Importa contratos/solicitações antigos salvos apenas neste navegador. Não cria logins. */
@@ -497,7 +838,7 @@ export function usePlatformStore() {
     if (!parsed) return 0;
     const existing = new Set(snapshot.contracts.map((c) => c.id));
     const toAdd = (parsed.contracts ?? []).filter((c: PlatformContract) => c?.id && !existing.has(c.id));
-    for (const c of toAdd) check(await db.rpc("create_platform_contract", { _id: c.id, _code: c.code, _data: contractData(c) }));
+    for (const c of toAdd) check(await supabase.rpc("create_platform_contract", { _id: c.id, _code: c.code, _data: contractData(c) }));
     const ids = new Set([...existing, ...toAdd.map((c: PlatformContract) => c.id)]);
     const reqs = (parsed.changeRequests ?? []).filter((r: ChangeRequest) => ids.has(r.contractId) && !String(r.id).startsWith("req-1") && !String(r.id).startsWith("req-2"));
     for (const r of reqs) await addChangeRequest(r);
@@ -512,7 +853,10 @@ export function usePlatformStore() {
       await callUsers({ action: "branding", contractId, branding });
       await done();
     },
-    addChangeRequest, updateChangeRequestStatus, deleteChangeRequest, updatePlatformOrigin, importLegacyBrowserData, reload: reloadPlatformStore,
+    addChangeRequest, updateChangeRequestStatus, deleteChangeRequest, updatePlatformOrigin,
+    savePricingTiers, saveClauseTemplates, saveBillingConfig,
+    addContractInvoice, updateContractInvoice, deleteContractInvoice, generateCompetenceInvoices,
+    importLegacyBrowserData, reload: reloadPlatformStore,
     toggleContractModule: async (contractId: string, moduleId: ModuleId) => {
       const c = getContractById(contractId);
       if (!c) return;

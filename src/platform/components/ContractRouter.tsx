@@ -117,14 +117,14 @@ export const ContractRouter = () => {
         <Card className="max-w-md w-full border-destructive/40">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-destructive">
-              <ShieldAlert className="h-5 w-5" /> Acesso Restrito
+              <ShieldAlert className="h-5 w-5" /> Acesso Temporariamente Suspenso
             </CardTitle>
             <CardDescription>
-              O contrato {contract.code} está suspenso. Entre em contato com o responsável pela plataforma.
+              O ambiente do contrato {contract.code} ({contract.clientName}) encontra-se suspenso no momento. Entre em contato com o suporte SynapSys para regularizar seu acesso.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Link to={session.mode === "owner" ? "/" : `${contract.entryPath}/login`}>
+          <CardContent className="space-y-2">
+            <Link to={session.mode === "owner" ? "/plataforma" : `${contract.entryPath}/login`}>
               <Button className="w-full">
                 <ArrowLeft className="h-4 w-4 mr-2" />{" "}
                 {session.mode === "owner" ? "Voltar à Plataforma" : "Ir para Login"}

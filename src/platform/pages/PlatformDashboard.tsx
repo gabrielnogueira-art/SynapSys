@@ -13,13 +13,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  AlertTriangle,
   ArrowRight,
+  Banknote,
   Building2,
   Check,
   Church,
   Copy,
+  CreditCard,
   Eye,
   FileEdit,
+  FileText,
   FolderGit2,
   Globe,
   LayoutGrid,
@@ -53,6 +57,15 @@ import { contractPublicUrl, usePlatformOrigin } from "@/platform/contractLinks";
 import { PlatformUsersTab } from "@/platform/components/PlatformUsersTab";
 import { PlatformRequestsTab } from "@/platform/components/PlatformRequestsTab";
 import { PlatformCatalogTab } from "@/platform/components/PlatformCatalogTab";
+import { PlatformBillingTab } from "@/platform/components/PlatformBillingTab";
+import { PlatformPlansAndClausesTab } from "@/platform/components/PlatformPlansAndClausesTab";
+import {
+  CONTRACT_LEGAL_STATUS_META,
+  formatBRL,
+  getContractDelinquencySummary,
+  roundCurrency,
+  todayIsoDate,
+} from "@/platform/saasDefaults";
 import { useToast } from "@/hooks/use-toast";
 import { AccountAccessDialog } from "@/platform/components/AccountAccessDialog";
 import { PlatformBrand } from "@/platform/components/PlatformBrand";
@@ -84,6 +97,9 @@ export const PlatformDashboard = () => {
   const [accountOpen, setAccountOpen] = useState(false);
   const [originDialogOpen, setOriginDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("contracts");
+  const [selectedBillingContract, setSelectedBillingContract] = useState<string>("all");
+  const [selectedLegalContractId, setSelectedLegalContractId] = useState<string>("");
+  const [plansSubSection, setPlansSubSection] = useState<"plans" | "clauses">("plans");
   const [search, setSearch] = useState("");
   const [segmentFilter, setSegmentFilter] = useState<"all" | ProjectSegment>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | ContractStatus>("all");
@@ -156,18 +172,55 @@ export const PlatformDashboard = () => {
         c.clientName.toLowerCase().includes(q) ||
         (c.city?.toLowerCase().includes(q) ?? false) ||
         (c.responsibleName?.toLowerCase().includes(q) ?? false) ||
+        (c.documentNumber?.toLowerCase().includes(q) ?? false) ||
         c.codeFolder.toLowerCase().includes(q)
       );
     });
   }, [store.contracts, search, segmentFilter, statusFilter]);
 
   const metrics = useMemo(() => {
-    const activeCount = store.contracts.filter((c) => c.status === "ativo").length;
+    const today = todayIsoDate();
+    const activeContracts = store.contracts.filter((c) => c.status === "ativo");
+    const activeCount = activeContracts.length;
     const churchCount = store.contracts.filter((c) => c.segment === "igreja").length;
     const commerceCount = store.contracts.filter((c) => c.segment === "comercio").length;
     const openRequests = store.changeRequests.filter((r) => r.status !== "concluido").length;
-    return { activeCount, churchCount, commerceCount, openRequests };
-  }, [store.contracts, store.changeRequests]);
+    const mrrActive = roundCurrency(
+      activeContracts.reduce((sum, c) => sum + (Number(c.monthlyValue) || 0), 0)
+    );
+    const totalUnits = store.contracts.reduce((sum, c) => sum + (c.unitsCount ?? 1), 0);
+
+    let overdueAmount = 0;
+    let overdueInvoicesCount = 0;
+    let dueSoonCount = 0;
+    let delinquentContractsCount = 0;
+    for (const c of store.contracts) {
+      const del = getContractDelinquencySummary(
+        c,
+        today,
+        store.billingConfig.gracePeriodDays
+      );
+      if (del.overdueCount > 0) {
+        delinquentContractsCount += 1;
+        overdueInvoicesCount += del.overdueCount;
+        overdueAmount = roundCurrency(overdueAmount + del.overdueAmount);
+      }
+      dueSoonCount += del.dueSoonCount;
+    }
+
+    return {
+      activeCount,
+      churchCount,
+      commerceCount,
+      openRequests,
+      mrrActive,
+      totalUnits,
+      overdueAmount,
+      overdueInvoicesCount,
+      dueSoonCount,
+      delinquentContractsCount,
+    };
+  }, [store.contracts, store.changeRequests, store.billingConfig.gracePeriodDays]);
 
   const handleCopyContractPrompt = async (contract: PlatformContract) => {
     const prompt = buildAntigravityEditPrompt(contract);
@@ -187,6 +240,17 @@ export const PlatformDashboard = () => {
   const handleOpenRequestFor = (contractId: string) => {
     setPreselectedReqContract(contractId);
     setActiveTab("requests");
+  };
+
+  const handleOpenBillingFor = (contractId: string) => {
+    setSelectedBillingContract(contractId);
+    setActiveTab("billing");
+  };
+
+  const handleOpenDraftFor = (contractId: string) => {
+    setSelectedLegalContractId(contractId);
+    setPlansSubSection("clauses");
+    setActiveTab("plans-clauses");
   };
 
   if (role.loading || store.loading) {
@@ -247,7 +311,7 @@ export const PlatformDashboard = () => {
           <div><p className="text-xs text-primary mb-2">PLATAFORMA DE GESTÃO</p><h1 className="text-2xl sm:text-3xl font-semibold">Visão geral</h1></div>
           <p className="text-sm text-muted-foreground">{authState.email || "Gestão central"}</p>
         </div>
-        {/* KPIs */}
+        {/* KPIs SaaS Health */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="platform-metric">
             <CardHeader className="pb-2">
@@ -257,7 +321,7 @@ export const PlatformDashboard = () => {
               </CardDescription>
               <CardTitle className="text-2xl">{store.contracts.length}</CardTitle>
               <p className="text-xs text-muted-foreground">
-                {metrics.activeCount} ativo(s) em operação
+                {metrics.activeCount} ativo(s) • {metrics.churchCount} Igreja • {metrics.commerceCount} Comércio
               </p>
             </CardHeader>
           </Card>
@@ -265,14 +329,45 @@ export const PlatformDashboard = () => {
           <Card className="platform-metric">
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center justify-between">
-                <span>Projetos por Segmento</span>
-                <Church className="h-4 w-4 text-primary" />
+                <span>MRR (Recorrência Ativa)</span>
+                <Banknote className="h-4 w-4 text-primary" />
               </CardDescription>
-              <CardTitle className="text-xl">
-                {metrics.churchCount} Igreja • {metrics.commerceCount} Comércio
+              <CardTitle className="text-2xl text-primary">
+                {formatBRL(metrics.mrrActive)}
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Verticais com código e módulos separados
+                {metrics.totalUnits} igreja(s)/unidade(s) em carteira
+              </p>
+            </CardHeader>
+          </Card>
+
+          <Card
+            className="platform-metric cursor-pointer hover:border-primary/50 transition-colors"
+            onClick={() => setActiveTab("billing")}
+          >
+            <CardHeader className="pb-2">
+              <CardDescription className="flex items-center justify-between">
+                <span>Adimplência & Cobranças</span>
+                <CreditCard
+                  className={`h-4 w-4 ${
+                    metrics.overdueInvoicesCount > 0 ? "text-destructive" : "text-emerald-400"
+                  }`}
+                />
+              </CardDescription>
+              <CardTitle
+                className={`text-2xl ${
+                  metrics.overdueInvoicesCount > 0 ? "text-destructive" : "text-emerald-400"
+                }`}
+              >
+                {metrics.overdueInvoicesCount > 0
+                  ? formatBRL(metrics.overdueAmount)
+                  : "Em dia"}
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {metrics.overdueInvoicesCount > 0
+                  ? `${metrics.overdueInvoicesCount} vencida(s) (${metrics.delinquentContractsCount} contrato(s)) • `
+                  : ""}
+                {metrics.dueSoonCount} vence(m) em até 5 dias
               </p>
             </CardHeader>
           </Card>
@@ -280,44 +375,76 @@ export const PlatformDashboard = () => {
           <Card className="platform-metric">
             <CardHeader className="pb-2">
               <CardDescription className="flex items-center justify-between">
-                <span>Usuários Vinculados</span>
+                <span>Usuários & Adequações</span>
                 <Users className="h-4 w-4 text-accent" />
               </CardDescription>
               <CardTitle className="text-2xl">{store.users.length}</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Acessos distribuídos nos contratos
-              </p>
-            </CardHeader>
-          </Card>
-
-          <Card className="platform-metric">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center justify-between">
-                <span>Adequações Solicitadas</span>
-                <FileEdit className="h-4 w-4 text-primary" />
-              </CardDescription>
-              <CardTitle className="text-2xl">{metrics.openRequests}</CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Em aberto para atendimento por contrato
+                {metrics.openRequests} adequação(ões) • {store.pendingRequests.length} acesso(s) pendente(s)
               </p>
             </CardHeader>
           </Card>
         </div>
 
+        {(metrics.overdueInvoicesCount > 0 ||
+          metrics.dueSoonCount > 0 ||
+          store.pendingRequests.length > 0) && (
+          <div className="rounded-lg border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-foreground">
+              <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+              <span className="font-medium">Alertas do mês:</span>
+              {metrics.overdueInvoicesCount > 0 && (
+                <Badge variant="destructive" className="text-[11px]">
+                  {metrics.overdueInvoicesCount} cobrança(s) em atraso ({formatBRL(metrics.overdueAmount)})
+                </Badge>
+              )}
+              {metrics.dueSoonCount > 0 && (
+                <Badge variant="outline" className="text-[11px] border-amber-500/40 text-amber-300">
+                  {metrics.dueSoonCount} vence(m) nos próximos 5 dias
+                </Badge>
+              )}
+              {store.pendingRequests.length > 0 && (
+                <Badge variant="secondary" className="text-[11px]">
+                  {store.pendingRequests.length} solicitação(ões) de acesso aguardando
+                </Badge>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {(metrics.overdueInvoicesCount > 0 || metrics.dueSoonCount > 0) && (
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveTab("billing")}>
+                  Abrir Financeiro
+                </Button>
+              )}
+              {store.pendingRequests.length > 0 && (
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setActiveTab("users")}>
+                  Ver Acessos
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Navegação principal */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto">
-            <TabsTrigger value="contracts" className="py-3 whitespace-normal text-center">
-              Contratos Vigentes ({store.contracts.length})
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 h-auto">
+            <TabsTrigger value="contracts" className="py-3 whitespace-normal text-center text-xs">
+              Contratos ({store.contracts.length})
             </TabsTrigger>
-            <TabsTrigger value="users" className="py-3 whitespace-normal text-center">
+            <TabsTrigger value="billing" className="py-3 whitespace-normal text-center text-xs">
+              Financeiro & Cobranças
+              {metrics.overdueInvoicesCount > 0 ? ` (${metrics.overdueInvoicesCount})` : ""}
+            </TabsTrigger>
+            <TabsTrigger value="plans-clauses" className="py-3 whitespace-normal text-center text-xs">
+              Cláusulas & Planos
+            </TabsTrigger>
+            <TabsTrigger value="users" className="py-3 whitespace-normal text-center text-xs">
               Usuários & Acessos ({store.users.length})
             </TabsTrigger>
-            <TabsTrigger value="requests" className="py-3 whitespace-normal text-center">
-              Solicitações de Ajuste ({metrics.openRequests})
+            <TabsTrigger value="requests" className="py-3 whitespace-normal text-center text-xs">
+              Adequações ({metrics.openRequests})
             </TabsTrigger>
-            <TabsTrigger value="catalog" className="py-3 whitespace-normal text-center">
-              Catálogo de Módulos
+            <TabsTrigger value="catalog" className="py-3 whitespace-normal text-center text-xs">
+              Catálogo
             </TabsTrigger>
           </TabsList>
 
@@ -400,6 +527,14 @@ export const PlatformDashboard = () => {
                 const usersCount = store.users.filter(
                   (u) => u.contractId === contract.id
                 ).length;
+                const delinquency = getContractDelinquencySummary(
+                  contract,
+                  todayIsoDate(),
+                  store.billingConfig.gracePeriodDays
+                );
+                const legalMeta = contract.contractLegalStatus
+                  ? CONTRACT_LEGAL_STATUS_META[contract.contractLegalStatus]
+                  : null;
 
                 return (
                   <Card
@@ -425,6 +560,26 @@ export const PlatformDashboard = () => {
                             )}
                             {seg.name}
                           </Badge>
+                          {delinquency.status === "inadimplente" && (
+                            <Badge variant="destructive" className="text-[11px]">
+                              Em atraso ({delinquency.maxDaysOverdue}d)
+                            </Badge>
+                          )}
+                          {delinquency.status === "a_vencer" && (
+                            <Badge variant="outline" className="text-[11px] border-amber-500/40 text-amber-400">
+                              A vencer
+                            </Badge>
+                          )}
+                          {delinquency.status === "adimplente" && (
+                            <Badge variant="outline" className="text-[11px] border-emerald-500/40 text-emerald-400">
+                              Em dia
+                            </Badge>
+                          )}
+                          {legalMeta && (
+                            <Badge variant={legalMeta.badgeVariant} className="text-[10px]">
+                              {legalMeta.label}
+                            </Badge>
+                          )}
                         </div>
 
                         {!contract.isReferenceExample && (
@@ -458,9 +613,13 @@ export const PlatformDashboard = () => {
                             contract.responsibleName &&
                               `Resp.: ${contract.responsibleName}`,
                             `${usersCount} usuário(s)`,
-                            contract.authSource === "supabase"
-                              ? "Auth: Supabase Produção"
-                              : "Auth: Local / Híbrido",
+                            typeof contract.monthlyValue === "number"
+                              ? `${formatBRL(contract.monthlyValue)}/mês`
+                              : null,
+                            `${contract.unitsCount ?? 1} ${
+                              contract.segment === "igreja" ? "igreja(s)" : "unid."
+                            }`,
+                            contract.documentNumber || null,
                           ]
                             .filter(Boolean)
                             .join(" • ")}
@@ -585,6 +744,22 @@ export const PlatformDashboard = () => {
 
                         <Button
                           variant="outline"
+                          onClick={() => handleOpenBillingFor(contract.id)}
+                          title="Ver cobranças e adimplência deste contrato"
+                        >
+                          <CreditCard className="h-4 w-4 mr-1.5" /> Cobranças
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          onClick={() => handleOpenDraftFor(contract.id)}
+                          title="Gerar minuta contratual, cláusulas e PDF"
+                        >
+                          <FileText className="h-4 w-4 mr-1.5" /> Minuta
+                        </Button>
+
+                        <Button
+                          variant="outline"
                           onClick={() => setEditingContract(contract)}
                           title="Configurar módulos e dados do contrato"
                         >
@@ -606,7 +781,41 @@ export const PlatformDashboard = () => {
             </div>
           </TabsContent>
 
-          {/* TAB 2: USUÁRIOS */}
+          {/* TAB 2: GESTÃO FINANCEIRA & COBRANÇAS */}
+          <TabsContent value="billing">
+            <PlatformBillingTab
+              contracts={store.contracts}
+              billingConfig={store.billingConfig}
+              selectedContractFilter={selectedBillingContract}
+              onChangeContractFilter={setSelectedBillingContract}
+              onAddInvoice={store.addContractInvoice}
+              onUpdateInvoice={store.updateContractInvoice}
+              onDeleteInvoice={store.deleteContractInvoice}
+              onGenerateCompetenceInvoices={store.generateCompetenceInvoices}
+              onUpdateContract={store.updateContract}
+              onSaveBillingConfig={store.saveBillingConfig}
+            />
+          </TabsContent>
+
+          {/* TAB 3: CLÁUSULAS & TABELA DE PLANOS */}
+          <TabsContent value="plans-clauses">
+            <PlatformPlansAndClausesTab
+              contracts={store.contracts}
+              pricingTiers={store.pricingTiers}
+              clauseTemplates={store.clauseTemplates}
+              billingConfig={store.billingConfig}
+              selectedContractId={selectedLegalContractId || store.contracts[0]?.id || ""}
+              onSelectContractId={setSelectedLegalContractId}
+              activeSubSection={plansSubSection}
+              onChangeSubSection={setPlansSubSection}
+              onSavePricingTiers={store.savePricingTiers}
+              onSaveClauseTemplates={store.saveClauseTemplates}
+              onSaveBillingConfig={store.saveBillingConfig}
+              onUpdateContract={store.updateContract}
+            />
+          </TabsContent>
+
+          {/* TAB 4: USUÁRIOS */}
           <TabsContent value="users">
             <PlatformUsersTab
               contracts={store.contracts}
@@ -621,7 +830,7 @@ export const PlatformDashboard = () => {
             />
           </TabsContent>
 
-          {/* TAB 3: SOLICITAÇÕES DE AJUSTE */}
+          {/* TAB 5: SOLICITAÇÕES DE AJUSTE */}
           <TabsContent value="requests">
             <PlatformRequestsTab
               contracts={store.contracts}
@@ -633,7 +842,7 @@ export const PlatformDashboard = () => {
             />
           </TabsContent>
 
-          {/* TAB 4: CATÁLOGO & ARQUITETURA */}
+          {/* TAB 6: CATÁLOGO & ARQUITETURA */}
           <TabsContent value="catalog">
             <PlatformCatalogTab contracts={store.contracts} />
           </TabsContent>
@@ -644,6 +853,7 @@ export const PlatformDashboard = () => {
         open={newContractOpen}
         onOpenChange={setNewContractOpen}
         nextCodePreview={nextCodePreview}
+        pricingTiers={store.pricingTiers}
         onCreate={async (input) => {
           const created = await store.addContract(input);
           toast({
@@ -656,6 +866,7 @@ export const PlatformDashboard = () => {
 
       <ContractModulesDialog
         contract={editingContract}
+        pricingTiers={store.pricingTiers}
         onClose={() => setEditingContract(null)}
         onSave={async (id, patch) => {
           await store.updateContract(id, patch);

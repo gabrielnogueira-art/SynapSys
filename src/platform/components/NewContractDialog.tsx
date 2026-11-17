@@ -32,6 +32,7 @@ import {
   ContractStatus,
   ModuleId,
   PlatformContract,
+  PricingTier,
   ProjectSegment,
 } from "@/platform/types";
 import {
@@ -39,6 +40,11 @@ import {
   SEGMENT_DEFINITIONS,
   slugifyContractFolder,
 } from "@/platform/catalog";
+import {
+  calculateTieredPrice,
+  DEFAULT_PRICING_TIERS,
+  formatBRL,
+} from "@/platform/saasDefaults";
 import { useToast } from "@/hooks/use-toast";
 import { NewContractInput } from "@/platform/store";
 
@@ -46,6 +52,7 @@ interface NewContractDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   nextCodePreview: string;
+  pricingTiers?: PricingTier[];
   onCreate: (input: NewContractInput) => Promise<PlatformContract>;
 }
 
@@ -53,12 +60,16 @@ export const NewContractDialog = ({
   open,
   onOpenChange,
   nextCodePreview,
+  pricingTiers = DEFAULT_PRICING_TIERS,
   onCreate,
 }: NewContractDialogProps) => {
   const { toast } = useToast();
   const { origin: platformOrigin } = usePlatformOrigin();
   const [saving, setSaving] = useState(false);
   const [clientName, setClientName] = useState("");
+  const [legalName, setLegalName] = useState("");
+  const [documentNumber, setDocumentNumber] = useState("");
+  const [address, setAddress] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
   const [requireLoginOnEntry, setRequireLoginOnEntry] = useState(true);
@@ -67,10 +78,17 @@ export const NewContractDialog = ({
   const [city, setCity] = useState("");
   const [responsibleName, setResponsibleName] = useState("");
   const [responsibleEmail, setResponsibleEmail] = useState("");
-  const [monthlyValue, setMonthlyValue] = useState("");
+  const [unitsCount, setUnitsCount] = useState("1");
+  const [billingDueDay, setBillingDueDay] = useState("10");
+  const [monthlyValue, setMonthlyValue] = useState(() =>
+    String(calculateTieredPrice("igreja", 1, pricingTiers).totalMonthly.toFixed(2))
+  );
+  const [monthlyEdited, setMonthlyEdited] = useState(false);
   const [notes, setNotes] = useState("");
   const [selectedModules, setSelectedModules] = useState<ModuleId[]>(["igreja_ebd"]);
 
+  const parsedUnits = Math.max(1, Math.floor(Number(unitsCount) || 1));
+  const tierCalc = calculateTieredPrice(segment, parsedUnits, pricingTiers);
   const segmentModules = getModulesBySegment(segment);
   const folderSlug = slugifyContractFolder(nextCodePreview, clientName || "cliente");
 
@@ -78,6 +96,21 @@ export const NewContractDialog = ({
     setSegment(nextSeg);
     const defaultMod = getModulesBySegment(nextSeg)[0]?.id;
     setSelectedModules(defaultMod ? [defaultMod] : []);
+    if (!monthlyEdited) {
+      setMonthlyValue(
+        calculateTieredPrice(nextSeg, parsedUnits, pricingTiers).totalMonthly.toFixed(2)
+      );
+    }
+  };
+
+  const handleUnitsChange = (nextRaw: string) => {
+    setUnitsCount(nextRaw);
+    const nextUnits = Math.max(1, Math.floor(Number(nextRaw) || 1));
+    if (!monthlyEdited) {
+      setMonthlyValue(
+        calculateTieredPrice(segment, nextUnits, pricingTiers).totalMonthly.toFixed(2)
+      );
+    }
   };
 
   const toggleModule = (modId: ModuleId) => {
@@ -96,36 +129,56 @@ export const NewContractDialog = ({
 
     setSaving(true);
     try {
-    const validSlug = validateContractSlug(slug);
-    await onCreate({
-      slug: validSlug,
-      requireLoginOnEntry,
-      clientName,
-      segment,
-      status,
-      activeModules: selectedModules,
-      city,
-      responsibleName,
-      responsibleEmail,
-      monthlyValue: monthlyValue ? parseFloat(monthlyValue) : undefined,
-      planName: `${SEGMENT_DEFINITIONS[segment].name} (${selectedModules.length} módulo${
-        selectedModules.length > 1 ? "s" : ""
-      })`,
-      notes,
-    });
+      const validSlug = validateContractSlug(slug);
+      await onCreate({
+        slug: validSlug,
+        requireLoginOnEntry,
+        clientName,
+        legalName: legalName.trim() || undefined,
+        documentNumber: documentNumber.trim() || undefined,
+        address: address.trim() || undefined,
+        unitsCount: parsedUnits,
+        billingDueDay: Math.max(1, Math.min(28, Math.floor(Number(billingDueDay) || 10))),
+        segment,
+        status,
+        activeModules: selectedModules,
+        city,
+        responsibleName,
+        responsibleEmail,
+        monthlyValue: monthlyValue ? parseFloat(monthlyValue) : tierCalc.totalMonthly,
+        planName: `${tierCalc.tier.name} (${parsedUnits} ${
+          segment === "igreja" ? "igreja(s)" : "unid."
+        } • ${selectedModules.length} módulo${selectedModules.length > 1 ? "s" : ""})`,
+        notes,
+      });
 
-    setClientName("");
-    setSlug("");
-    setSlugEdited(false);
-    setRequireLoginOnEntry(true);
-    setCity("");
-    setResponsibleName("");
-    setResponsibleEmail("");
-    setMonthlyValue("");
-    setNotes("");
-    onOpenChange(false);
-    } catch (e: any) { toast({ variant: "destructive", title: "Não foi possível criar contrato", description: e.message }); }
-    finally { setSaving(false); }
+      setClientName("");
+      setLegalName("");
+      setDocumentNumber("");
+      setAddress("");
+      setSlug("");
+      setSlugEdited(false);
+      setRequireLoginOnEntry(true);
+      setCity("");
+      setResponsibleName("");
+      setResponsibleEmail("");
+      setUnitsCount("1");
+      setBillingDueDay("10");
+      setMonthlyEdited(false);
+      setMonthlyValue(
+        calculateTieredPrice(segment, 1, pricingTiers).totalMonthly.toFixed(2)
+      );
+      setNotes("");
+      onOpenChange(false);
+    } catch (e: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Não foi possível criar contrato",
+        description: e instanceof Error ? e.message : "Erro ao criar contrato",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -226,6 +279,33 @@ export const NewContractDialog = ({
             </div>
 
             <div className="space-y-1">
+              <Label>CNPJ / CPF (p/ Minuta)</Label>
+              <Input
+                placeholder="00.000.000/0001-00"
+                value={documentNumber}
+                onChange={(e) => setDocumentNumber(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Razão Social (se diferente)</Label>
+              <Input
+                placeholder="Nome jurídico completo"
+                value={legalName}
+                onChange={(e) => setLegalName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Endereço completo (p/ Minuta)</Label>
+              <Input
+                placeholder="Rua, nº, bairro, CEP"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1">
               <Label>Responsável pelo Contrato</Label>
               <Input
                 placeholder="Nome do pastor ou gerente"
@@ -245,13 +325,56 @@ export const NewContractDialog = ({
             </div>
 
             <div className="space-y-1">
-              <Label>Valor Mensal (R$ - opcional)</Label>
+              <Label>{segment === "igreja" ? "Qtde de Igrejas / Unidades" : "Qtde de Unidades / Lojas"}</Label>
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                value={unitsCount}
+                onChange={(e) => handleUnitsChange(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Dia de vencimento mensal</Label>
+              <Input
+                type="number"
+                min="1"
+                max="28"
+                step="1"
+                value={billingDueDay}
+                onChange={(e) => setBillingDueDay(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <Label>Valor Mensal (R$)</Label>
+                {monthlyEdited && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-xs text-primary"
+                    onClick={() => {
+                      setMonthlyEdited(false);
+                      setMonthlyValue(tierCalc.totalMonthly.toFixed(2));
+                    }}
+                  >
+                    Aplicar tabela ({formatBRL(tierCalc.totalMonthly)})
+                  </Button>
+                )}
+              </div>
               <Input
                 type="number"
                 step="0.01"
-                placeholder="299.00"
+                min="0"
+                placeholder="99.90"
                 value={monthlyValue}
-                onChange={(e) => setMonthlyValue(e.target.value)}
+                onChange={(e) => {
+                  setMonthlyEdited(true);
+                  setMonthlyValue(e.target.value);
+                }}
               />
             </div>
 
@@ -260,6 +383,18 @@ export const NewContractDialog = ({
               <div className="h-10 px-3 rounded-md border bg-muted/40 flex items-center text-xs font-mono text-muted-foreground truncate">
                 GitHub/src/contracts/{folderSlug}
               </div>
+            </div>
+
+            <div className="sm:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2">
+              <span>
+                <strong>{tierCalc.tier.name}:</strong> {tierCalc.ruleLabel} ={" "}
+                <strong className="text-primary">{formatBRL(tierCalc.totalMonthly)}/mês</strong>
+              </span>
+              {tierCalc.savingsPerUnit > 0 && (
+                <Badge variant="outline" className="text-[11px] border-primary/40 text-primary">
+                  Desconto de {formatBRL(tierCalc.savingsPerUnit)}/unid.
+                </Badge>
+              )}
             </div>
           </div>
 
