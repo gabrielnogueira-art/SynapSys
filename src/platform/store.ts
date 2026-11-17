@@ -115,11 +115,20 @@ export async function reloadPlatformStore() {
       const uid = session.session?.user?.id;
       const map = new Map<string, PlatformContract>();
 
-      const pub = await db.from("platform_contract_directory").select("id,data,created_at");
-      if (!pub.error) {
-        (pub.data ?? []).forEach((r: any) =>
+      const addPublic = (rows: any[] | null) =>
+        (rows ?? []).forEach((r: any) =>
           map.set(r.id, rowToContract({ ...r, code: r.data?.code }, true))
         );
+      if (uid) {
+        const pub = await db.from("platform_contract_directory").select("id,data,created_at");
+        if (!pub.error) addPublic(pub.data);
+      }
+      const linkKey = typeof window !== "undefined"
+        ? decodeURIComponent(window.location.pathname.match(/^\/c\/([^/]+)/)?.[1] ?? "")
+        : "";
+      if (linkKey) {
+        const one = await db.rpc("resolve_contract_directory", { _key: linkKey });
+        if (!one.error) addPublic(one.data);
       }
 
       let users: PlatformUser[] = [];
