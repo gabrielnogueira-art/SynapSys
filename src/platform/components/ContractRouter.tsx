@@ -1,4 +1,4 @@
-import { Link, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ShieldAlert } from "lucide-react";
@@ -6,6 +6,7 @@ import { usePlatformStore } from "@/platform/store";
 import { CONTRACT_COMPONENTS } from "@/contracts/registry";
 import { GenericContractEntry } from "@/contracts/GenericContractEntry";
 import { ContractBanner } from "@/platform/components/ContractBanner";
+import { ContractSubpageHeader } from "@/platform/components/ContractSubpageHeader";
 import { EBDRegistrationForm } from "@/components/EBDRegistrationForm";
 import ChoirView from "@/pages/Choir";
 import Login from "@/pages/Login";
@@ -44,6 +45,7 @@ function WithBanner({
  */
 export const ContractRouter = () => {
   const { contractId } = useParams<{ contractId: string }>();
+  const navigate = useNavigate();
   const store = usePlatformStore();
   const { contracts, loading, error } = store;
   const contract = contracts.find((c) => c.id === contractId || c.slug === contractId);
@@ -218,7 +220,25 @@ export const ContractRouter = () => {
     return <EntryComponent contract={contract} initialArea={initialArea} />;
   };
 
-  const guardEbdSubroute = (element: React.ReactNode, requireAuthAlways = false) => {
+  const goBackOrContract = () => {
+    const idx =
+      typeof window !== "undefined" &&
+      window.history.state &&
+      typeof window.history.state.idx === "number"
+        ? window.history.state.idx
+        : 0;
+    if (idx > 0) {
+      navigate(-1);
+      return;
+    }
+    navigate(contract.entryPath, { replace: true });
+  };
+
+  const guardEbdSubroute = (
+    element: React.ReactNode,
+    pageLabel: string,
+    requireAuthAlways = false
+  ) => {
     if (access.loading || role.loading) {
       return <div className="p-8 text-muted-foreground">Verificando acesso…</div>;
     }
@@ -237,7 +257,17 @@ export const ContractRouter = () => {
     if ((access.signedIn || session.mode === "client") && !isModuleAllowed(effectiveAllowed, "igreja_ebd")) {
       return restrictedModuleCard("igreja_ebd");
     }
-    return <WithBanner contract={contract}>{element}</WithBanner>;
+    return (
+      <WithBanner contract={contract}>
+        <ContractSubpageHeader
+          contract={contract}
+          pageLabel={pageLabel}
+          parentLabel="EBD"
+          parentPath={`${contract.entryPath}/ebd`}
+        />
+        {element}
+      </WithBanner>
+    );
   };
 
   return (
@@ -249,7 +279,16 @@ export const ContractRouter = () => {
             <div className="p-8 text-muted-foreground">Verificando permissão…</div>
           ) : access.manager || role.role === "master" ? (
             <WithBanner contract={contract}>
-              <div className="p-4">
+              <ContractSubpageHeader
+                contract={contract}
+                pageLabel="Logins & Acessos"
+                fallbackPath={
+                  role.role === "master" && session.mode === "owner"
+                    ? "/plataforma"
+                    : contract.entryPath
+                }
+              />
+              <div className="container mx-auto px-4 py-6">
                 <PlatformUsersTab
                   contracts={[contract]}
                   users={store.users.filter((u) => u.contractId === contract.id)}
@@ -278,15 +317,36 @@ export const ContractRouter = () => {
           access.loading || role.loading ? (
             <div className="p-8 text-muted-foreground">Verificando permissão…</div>
           ) : access.manager || role.role === "master" ? (
-            <ContractModulesDialog
-              contract={contract}
-              brandingOnly={role.role !== "master"}
-              onClose={() => window.location.assign(contract.entryPath)}
-              onSave={async (id, patch) => {
-                if (role.role === "master") await store.updateContract(id, patch);
-                else await store.updateBranding(id, patch.branding);
-              }}
-            />
+            <WithBanner contract={contract}>
+              <ContractSubpageHeader
+                contract={contract}
+                pageLabel="Configurações do Contrato"
+              />
+              <div className="container mx-auto px-4 py-8">
+                <Card className="max-w-lg mx-auto">
+                  <CardHeader>
+                    <CardTitle>Configurações — {contract.clientName}</CardTitle>
+                    <CardDescription>
+                      Ajuste identidade visual, link ou parâmetros do contrato {contract.code}.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button variant="outline" onClick={goBackOrContract}>
+                      <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+              <ContractModulesDialog
+                contract={contract}
+                brandingOnly={role.role !== "master"}
+                onClose={goBackOrContract}
+                onSave={async (id, patch) => {
+                  if (role.role === "master") await store.updateContract(id, patch);
+                  else await store.updateBranding(id, patch.branding);
+                }}
+              />
+            </WithBanner>
           ) : (
             <Navigate
               to={`${contract.entryPath}/login?next=${encodeURIComponent(location.pathname)}`}
@@ -303,8 +363,8 @@ export const ContractRouter = () => {
           element={renderEntry(modId)}
         />
       ))}
-      <Route path="form" element={guardEbdSubroute(<EBDRegistrationForm />)} />
-      <Route path="coristas" element={guardEbdSubroute(<ChoirView />)} />
+      <Route path="form" element={guardEbdSubroute(<EBDRegistrationForm />, "Formulário de Aula")} />
+      <Route path="coristas" element={guardEbdSubroute(<ChoirView />, "Hinos (Coristas)")} />
       <Route
         path="login"
         element={
@@ -321,8 +381,8 @@ export const ContractRouter = () => {
           </WithBanner>
         }
       />
-      <Route path="admin" element={guardEbdSubroute(<Admin />, true)} />
-      <Route path="professor" element={guardEbdSubroute(<Professor />, true)} />
+      <Route path="admin" element={guardEbdSubroute(<Admin />, "Administração EBD", true)} />
+      <Route path="professor" element={guardEbdSubroute(<Professor />, "Área do Professor", true)} />
       <Route path="*" element={renderEntry()} />
     </Routes>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,8 +86,18 @@ const STATUS_BADGE: Record<
   suspenso: { label: "Suspenso", variant: "destructive" },
 };
 
+const VALID_TABS = new Set([
+  "contracts",
+  "billing",
+  "plans-clauses",
+  "users",
+  "requests",
+  "catalog",
+]);
+
 export const PlatformDashboard = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const store = usePlatformStore();
   const session = useViewerSession();
@@ -96,7 +106,12 @@ export const PlatformDashboard = () => {
 
   const [accountOpen, setAccountOpen] = useState(false);
   const [originDialogOpen, setOriginDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("contracts");
+  const rawTab = searchParams.get("tab") ?? "";
+  const activeTab = VALID_TABS.has(rawTab) ? rawTab : "contracts";
+  const setActiveTab = (nextTab: string) => {
+    const next = VALID_TABS.has(nextTab) ? nextTab : "contracts";
+    setSearchParams(next === "contracts" ? {} : { tab: next }, { replace: true });
+  };
   const [selectedBillingContract, setSelectedBillingContract] = useState<string>("all");
   const [selectedLegalContractId, setSelectedLegalContractId] = useState<string>("");
   const [plansSubSection, setPlansSubSection] = useState<"plans" | "clauses">("plans");

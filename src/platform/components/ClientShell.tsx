@@ -8,6 +8,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  ArrowLeft,
   Bell,
   BookOpen,
   Briefcase,
@@ -258,8 +259,22 @@ export const ClientShell = ({
             </div>
           </div>
 
-          {/* Right actions: Bell + 9-dots Area Switcher + User */}
+          {/* Right actions: Back to overview + Bell + 9-dots Area Switcher + User */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {overviewAllowed && activeArea !== "painel_geral" && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onSelectArea("painel_geral")}
+                className="h-9 px-2.5 text-slate-100 hover:text-white hover:bg-white/10 gap-1.5"
+                title="Voltar para a tela inicial do contrato"
+              >
+                <ArrowLeft className="h-4 w-4 text-amber-400" />
+                <span className="hidden sm:inline text-xs font-medium">Painel Geral</span>
+              </Button>
+            )}
+
             {/* Notifications */}
             <Popover>
               <PopoverTrigger asChild>
