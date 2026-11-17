@@ -740,6 +740,14 @@ export type Database = {
       }
       is_master: { Args: { _user_id: string }; Returns: boolean }
       reject_user: { Args: { _pending_id: string }; Returns: undefined }
+      resolve_contract_directory: {
+        Args: { _key: string }
+        Returns: {
+          created_at: string
+          data: Json
+          id: string
+        }[]
+      }
       teacher_has_class: {
         Args: { _class_id: number; _user_id: string }
         Returns: boolean
