@@ -317,9 +317,9 @@ export const ChurchTreasuryPreview = ({
         for (const r of rows) {
           if (r.module_key === "church_members") {
             const rawMembers = Array.isArray(r.data)
-              ? (r.data as MemberLookup[])
-              : Array.isArray((r.data as { members?: MemberLookup[] })?.members)
-              ? (r.data as { members: MemberLookup[] }).members
+              ? (r.data as unknown as MemberLookup[])
+              : Array.isArray((r.data as unknown as { members?: MemberLookup[] })?.members)
+              ? (r.data as unknown as { members: MemberLookup[] }).members
               : [];
             setMemberDirectory(rawMembers);
           } else if (r.module_key === "church_units" && Array.isArray(r.data)) {
