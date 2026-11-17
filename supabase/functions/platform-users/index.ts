@@ -220,7 +220,7 @@ Deno.serve(async (req) => {
         .eq("id", body.membership_id)
         .maybeSingle();
       if (!data) return json({ error: "Vínculo não encontrado" }, 404);
-      target = data as typeof target;
+      target = data as unknown as { id: string; user_id: string; access_level: string; data: Record<string, unknown> };
       contractId = data.contract_id;
     }
 
