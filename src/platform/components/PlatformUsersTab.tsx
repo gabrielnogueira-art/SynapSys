@@ -108,6 +108,21 @@ const MODULE_LEVEL_OPTIONS: Record<ModuleId, Array<{ value: string; label: strin
     { value: "operador", label: "Operador de Cadastros" },
     { value: "consulta", label: "Somente Consulta" },
   ],
+  igreja_cantina: [
+    { value: "admin", label: "Administrador (Total + Fechamento)" },
+    { value: "operador", label: "Operador de Caixa / Balcão" },
+    { value: "voluntario", label: "Voluntário (Produção / Consulta)" },
+  ],
+  igreja_livraria: [
+    { value: "admin", label: "Gestor Livraria (Total + Custos)" },
+    { value: "operador", label: "Operador Balcão / Entregas" },
+    { value: "voluntario", label: "Voluntário (Consulta Estoque)" },
+  ],
+  igreja_social: [
+    { value: "admin", label: "Coordenador Social (Total)" },
+    { value: "operador", label: "Diácono / Operador Entregas" },
+    { value: "voluntario", label: "Voluntário (Consulta)" },
+  ],
   comercio_tesouraria: [
     { value: "admin", label: "Gestor (Total)" },
     { value: "operador", label: "Operador" },

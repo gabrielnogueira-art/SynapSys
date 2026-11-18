@@ -47,12 +47,14 @@ import {
 } from "@/platform/saasDefaults";
 import { useToast } from "@/hooks/use-toast";
 import { NewContractInput } from "@/platform/store";
+import type { LabPromotionsMap } from "@/platform/labs/labsTypes";
 
 interface NewContractDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   nextCodePreview: string;
   pricingTiers?: PricingTier[];
+  labPromotions?: LabPromotionsMap;
   onCreate: (input: NewContractInput) => Promise<PlatformContract>;
 }
 
@@ -61,6 +63,7 @@ export const NewContractDialog = ({
   onOpenChange,
   nextCodePreview,
   pricingTiers = DEFAULT_PRICING_TIERS,
+  labPromotions,
   onCreate,
 }: NewContractDialogProps) => {
   const { toast } = useToast();
@@ -89,12 +92,12 @@ export const NewContractDialog = ({
 
   const parsedUnits = Math.max(1, Math.floor(Number(unitsCount) || 1));
   const tierCalc = calculateTieredPrice(segment, parsedUnits, pricingTiers);
-  const segmentModules = getModulesBySegment(segment);
+  const segmentModules = getModulesBySegment(segment, labPromotions);
   const folderSlug = slugifyContractFolder(nextCodePreview, clientName || "cliente");
 
   const handleSegmentChange = (nextSeg: ProjectSegment) => {
     setSegment(nextSeg);
-    const defaultMod = getModulesBySegment(nextSeg)[0]?.id;
+    const defaultMod = getModulesBySegment(nextSeg, labPromotions)[0]?.id;
     setSelectedModules(defaultMod ? [defaultMod] : []);
     if (!monthlyEdited) {
       setMonthlyValue(

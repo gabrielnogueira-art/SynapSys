@@ -7,8 +7,10 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
+  HandHeart,
   Landmark,
   Sparkles,
+  UtensilsCrossed,
 } from "lucide-react";
 import { ChurchModuleId, PlatformContract } from "@/platform/types";
 import { getModuleById } from "@/platform/catalog";
@@ -45,6 +47,24 @@ const AREA_META: Record<
     accent: "border-amber-200 bg-amber-50/40",
     summary: "Cadastro de igrejas/congregações, rol de membros, cartas e agenda pastoral.",
     highlights: ["Cadastro de Igrejas", "Rol de Membros", "Documentos & Agenda"],
+  },
+  igreja_cantina: {
+    icon: <UtensilsCrossed className="h-6 w-6 text-rose-600" />,
+    accent: "border-rose-200 bg-rose-50/40",
+    summary: "Produção inicial do culto/evento, PDV balcão rápido e fechamento com sobras.",
+    highlights: ["Produção do Dia", "PDV PIX/Dinheiro/Cartão", "Fechamento Automático"],
+  },
+  igreja_livraria: {
+    icon: <BookOpen className="h-6 w-6 text-indigo-600" />,
+    accent: "border-indigo-200 bg-indigo-50/40",
+    summary: "Revistas EBD por trimestre/faixa, bíblias/livros e camisetas de congressos.",
+    highlights: ["Revistas EBD", "Alertas de Estoque Mínimo", "Lucro Líquido"],
+  },
+  igreja_social: {
+    icon: <HandHeart className="h-6 w-6 text-teal-600" />,
+    accent: "border-teal-200 bg-teal-50/40",
+    summary: "Arrecadações por campanha, montagem de cestas e entregas sem duplicidade mensal.",
+    highlights: ["Despensa & Primícias", "Montagem de Cestas", "Famílias Assistidas"],
   },
 };
 

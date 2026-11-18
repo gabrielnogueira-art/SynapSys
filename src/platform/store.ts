@@ -30,6 +30,14 @@ import {
   validatePublicAppOrigin,
 } from "./contractLinks";
 import {
+  clearLabsTransactionsOnly,
+  createSeedLabsSandbox,
+  DEFAULT_LAB_PROMOTIONS,
+  normalizeLabPromotions,
+  normalizeLabsSandboxState,
+} from "./labs/labsDefaults";
+import type { LabPromotionsMap, LabsSandboxState } from "./labs/labsTypes";
+import {
   buildDueDateForCompetence,
   DEFAULT_BILLING_CONFIG,
   DEFAULT_CONTRACT_CLAUSES,
@@ -105,6 +113,8 @@ export interface PlatformState {
   pricingTiers: PricingTier[];
   clauseTemplates: ContractClauseTemplate[];
   billingConfig: PlatformBillingConfig;
+  labsSandbox: LabsSandboxState;
+  labPromotions: LabPromotionsMap;
   loading: boolean;
   error: string | null;
 }
@@ -140,6 +150,8 @@ let snapshot: PlatformState = {
   pricingTiers: DEFAULT_PRICING_TIERS,
   clauseTemplates: DEFAULT_CONTRACT_CLAUSES,
   billingConfig: DEFAULT_BILLING_CONFIG,
+  labsSandbox: createSeedLabsSandbox(),
+  labPromotions: DEFAULT_LAB_PROMOTIONS,
   loading: true,
   error: null,
 };
@@ -203,6 +215,8 @@ export async function reloadPlatformStore() {
       let pricingTiers = snapshot.pricingTiers;
       let clauseTemplates = snapshot.clauseTemplates;
       let billingConfig = snapshot.billingConfig;
+      let labsSandbox = snapshot.labsSandbox;
+      let labPromotions = snapshot.labPromotions;
 
       if (session.session && uid) {
         const [c, m, q, masterRow, p] = await Promise.all([
@@ -221,6 +235,8 @@ export async function reloadPlatformStore() {
               "platform_pricing_tiers",
               "platform_contract_clauses",
               "platform_billing_config",
+              "platform_labs_sandbox_v1",
+              "platform_labs_promotions",
             ]);
           if (!settingsRes.error && Array.isArray(settingsRes.data)) {
             for (const row of settingsRes.data) {
@@ -232,6 +248,10 @@ export async function reloadPlatformStore() {
                 clauseTemplates = normalizeClauseTemplates(row.value);
               } else if (row.key === "platform_billing_config") {
                 billingConfig = normalizeBillingConfig(row.value);
+              } else if (row.key === "platform_labs_sandbox_v1") {
+                labsSandbox = normalizeLabsSandboxState(row.value);
+              } else if (row.key === "platform_labs_promotions") {
+                labPromotions = normalizeLabPromotions(row.value);
               }
             }
           }
@@ -316,6 +336,8 @@ export async function reloadPlatformStore() {
         pricingTiers,
         clauseTemplates,
         billingConfig,
+        labsSandbox,
+        labPromotions,
         loading: false,
         error: null,
       });
@@ -831,6 +853,54 @@ export function usePlatformStore() {
     return { createdCount, skippedCount };
   };
 
+  const saveLabsSandbox = async (next: LabsSandboxState) => {
+    const normalized = normalizeLabsSandboxState({
+      ...next,
+      updatedAt: new Date().toISOString(),
+    });
+    emit({ ...snapshot, labsSandbox: normalized });
+    await requireMaster();
+    check(
+      await supabase.from("system_settings").upsert(
+        {
+          key: "platform_labs_sandbox_v1",
+          value: normalized as unknown as Json,
+          description: "Sandbox isolado do SynapSys Labs (exclusivo Master)",
+        },
+        { onConflict: "key" }
+      )
+    );
+  };
+
+  const resetLabsSandbox = async (mode: "seed" | "clear_transactions") => {
+    const next =
+      mode === "seed"
+        ? createSeedLabsSandbox()
+        : clearLabsTransactionsOnly(snapshot.labsSandbox);
+    await saveLabsSandbox({
+      ...next,
+      activeModule: snapshot.labsSandbox.activeModule,
+      roleMode: snapshot.labsSandbox.roleMode,
+    });
+  };
+
+  const saveLabPromotions = async (next: LabPromotionsMap) => {
+    await requireMaster();
+    const normalized = normalizeLabPromotions(next);
+    check(
+      await supabase.from("system_settings").upsert(
+        {
+          key: "platform_labs_promotions",
+          value: normalized as unknown as Json,
+          description: "Ciclo de vida e promoção de módulos do SynapSys Labs para o catálogo oficial",
+        },
+        { onConflict: "key" }
+      )
+    );
+    emit({ ...snapshot, labPromotions: normalized });
+    await done();
+  };
+
   /** Importa contratos/solicitações antigos salvos apenas neste navegador. Não cria logins. */
   const importLegacyBrowserData = async () => {
     await requireMaster();
@@ -856,6 +926,7 @@ export function usePlatformStore() {
     addChangeRequest, updateChangeRequestStatus, deleteChangeRequest, updatePlatformOrigin,
     savePricingTiers, saveClauseTemplates, saveBillingConfig,
     addContractInvoice, updateContractInvoice, deleteContractInvoice, generateCompetenceInvoices,
+    saveLabsSandbox, resetLabsSandbox, saveLabPromotions,
     importLegacyBrowserData, reload: reloadPlatformStore,
     toggleContractModule: async (contractId: string, moduleId: ModuleId) => {
       const c = getContractById(contractId);

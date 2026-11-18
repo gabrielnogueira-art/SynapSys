@@ -8,6 +8,7 @@ import {
   CalendarDays,
   FileBadge2,
   FileText,
+  HandHeart,
   Home,
   Landmark,
   LayoutDashboard,
@@ -18,6 +19,7 @@ import {
   UserCheck,
   UserCog,
   Users,
+  UtensilsCrossed,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +28,11 @@ import { EbdPortal } from "@/systems/ebd/EbdPortal";
 import { ChurchTreasuryPreview, TreasurySection } from "@/systems/church/ChurchTreasuryPreview";
 import { ChurchSecretariatPreview, SecretariatSection } from "@/systems/church/ChurchSecretariatPreview";
 import { ChurchOverviewPanel } from "@/systems/church/ChurchOverviewPanel";
+import {
+  ChurchCantinaContractView,
+  ChurchLivrariaContractView,
+  ChurchSocialContractView,
+} from "@/systems/church/modules/ChurchLabContractAdapters";
 import { ContractBanner } from "@/platform/components/ContractBanner";
 import { AreaKey, ClientShell, ShellSidebarItem } from "@/platform/components/ClientShell";
 import { getModuleById } from "@/platform/catalog";
@@ -125,10 +132,14 @@ export const ChurchWorkspace = ({ contract, overrides, initialArea }: ChurchWork
         ...enabledChurchModules.map((modId) => {
           const mod = getModuleById(modId);
           const icon =
-            modId === "igreja_ebd" ? (
+            modId === "igreja_ebd" || modId === "igreja_livraria" ? (
               <BookOpen className="h-4 w-4" />
             ) : modId === "igreja_tesouraria" ? (
               <Landmark className="h-4 w-4" />
+            ) : modId === "igreja_cantina" ? (
+              <UtensilsCrossed className="h-4 w-4" />
+            ) : modId === "igreja_social" ? (
+              <HandHeart className="h-4 w-4" />
             ) : (
               <Building2 className="h-4 w-4" />
             );
@@ -140,6 +151,32 @@ export const ChurchWorkspace = ({ contract, overrides, initialArea }: ChurchWork
             onClick: () => setActiveArea(modId),
           };
         }),
+      ];
+    }
+
+    if (
+      effectiveArea === "igreja_cantina" ||
+      effectiveArea === "igreja_livraria" ||
+      effectiveArea === "igreja_social"
+    ) {
+      const mod = getModuleById(effectiveArea);
+      const icon =
+        effectiveArea === "igreja_cantina" ? (
+          <UtensilsCrossed className="h-4 w-4" />
+        ) : effectiveArea === "igreja_livraria" ? (
+          <BookOpen className="h-4 w-4" />
+        ) : (
+          <HandHeart className="h-4 w-4" />
+        );
+      return [
+        ...items,
+        {
+          id: `area-${effectiveArea}`,
+          label: mod?.shortName ?? effectiveArea,
+          icon,
+          active: true,
+          onClick: () => setActiveArea(effectiveArea),
+        },
       ];
     }
 
@@ -381,6 +418,24 @@ export const ChurchWorkspace = ({ contract, overrides, initialArea }: ChurchWork
             activeSection={secSection}
             onChangeSection={setSecSection}
             moduleLevel={secretariatLevel}
+          />
+        )}
+        {effectiveArea === "igreja_cantina" && (
+          <ChurchCantinaContractView
+            contractId={contract.id}
+            moduleLevel={effectiveLevels?.igreja_cantina}
+          />
+        )}
+        {effectiveArea === "igreja_livraria" && (
+          <ChurchLivrariaContractView
+            contractId={contract.id}
+            moduleLevel={effectiveLevels?.igreja_livraria}
+          />
+        )}
+        {effectiveArea === "igreja_social" && (
+          <ChurchSocialContractView
+            contractId={contract.id}
+            moduleLevel={effectiveLevels?.igreja_social}
           />
         )}
       </ClientShell>

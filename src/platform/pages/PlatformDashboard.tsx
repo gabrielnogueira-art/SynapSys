@@ -24,6 +24,7 @@ import {
   Eye,
   FileEdit,
   FileText,
+  FlaskConical,
   FolderGit2,
   Globe,
   LayoutGrid,
@@ -59,6 +60,7 @@ import { PlatformRequestsTab } from "@/platform/components/PlatformRequestsTab";
 import { PlatformCatalogTab } from "@/platform/components/PlatformCatalogTab";
 import { PlatformBillingTab } from "@/platform/components/PlatformBillingTab";
 import { PlatformPlansAndClausesTab } from "@/platform/components/PlatformPlansAndClausesTab";
+import { PlatformLabsTab } from "@/platform/components/PlatformLabsTab";
 import {
   CONTRACT_LEGAL_STATUS_META,
   formatBRL,
@@ -90,6 +92,7 @@ const VALID_TABS = new Set([
   "contracts",
   "billing",
   "plans-clauses",
+  "labs",
   "users",
   "requests",
   "catalog",
@@ -441,7 +444,7 @@ export const PlatformDashboard = () => {
 
         {/* Navegação principal */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 h-auto">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 h-auto">
             <TabsTrigger value="contracts" className="py-3 whitespace-normal text-center text-xs">
               Contratos ({store.contracts.length})
             </TabsTrigger>
@@ -451,6 +454,9 @@ export const PlatformDashboard = () => {
             </TabsTrigger>
             <TabsTrigger value="plans-clauses" className="py-3 whitespace-normal text-center text-xs">
               Cláusulas & Planos
+            </TabsTrigger>
+            <TabsTrigger value="labs" className="py-3 whitespace-normal text-center text-xs text-primary">
+              <FlaskConical className="h-3.5 w-3.5 mr-1 inline" /> SynapSys Labs
             </TabsTrigger>
             <TabsTrigger value="users" className="py-3 whitespace-normal text-center text-xs">
               Usuários & Acessos ({store.users.length})
@@ -830,7 +836,18 @@ export const PlatformDashboard = () => {
             />
           </TabsContent>
 
-          {/* TAB 4: USUÁRIOS */}
+          {/* TAB 4: SYNAPSYS LABS (EXCLUSIVO MASTER) */}
+          <TabsContent value="labs">
+            <PlatformLabsTab
+              sandbox={store.labsSandbox}
+              promotions={store.labPromotions}
+              onSaveSandbox={store.saveLabsSandbox}
+              onResetSandbox={store.resetLabsSandbox}
+              onSavePromotions={store.saveLabPromotions}
+            />
+          </TabsContent>
+
+          {/* TAB 5: USUÁRIOS */}
           <TabsContent value="users">
             <PlatformUsersTab
               contracts={store.contracts}
@@ -845,7 +862,7 @@ export const PlatformDashboard = () => {
             />
           </TabsContent>
 
-          {/* TAB 5: SOLICITAÇÕES DE AJUSTE */}
+          {/* TAB 6: SOLICITAÇÕES DE AJUSTE */}
           <TabsContent value="requests">
             <PlatformRequestsTab
               contracts={store.contracts}
@@ -857,9 +874,12 @@ export const PlatformDashboard = () => {
             />
           </TabsContent>
 
-          {/* TAB 6: CATÁLOGO & ARQUITETURA */}
+          {/* TAB 7: CATÁLOGO & ARQUITETURA */}
           <TabsContent value="catalog">
-            <PlatformCatalogTab contracts={store.contracts} />
+            <PlatformCatalogTab
+              contracts={store.contracts}
+              labPromotions={store.labPromotions}
+            />
           </TabsContent>
         </Tabs>
       </main>
@@ -869,6 +889,7 @@ export const PlatformDashboard = () => {
         onOpenChange={setNewContractOpen}
         nextCodePreview={nextCodePreview}
         pricingTiers={store.pricingTiers}
+        labPromotions={store.labPromotions}
         onCreate={async (input) => {
           const created = await store.addContract(input);
           toast({
@@ -882,6 +903,7 @@ export const PlatformDashboard = () => {
       <ContractModulesDialog
         contract={editingContract}
         pricingTiers={store.pricingTiers}
+        labPromotions={store.labPromotions}
         onClose={() => setEditingContract(null)}
         onSave={async (id, patch) => {
           await store.updateContract(id, patch);

@@ -3,7 +3,28 @@ export type ProjectSegment = "igreja" | "comercio";
 export type ChurchModuleId =
   | "igreja_ebd"
   | "igreja_tesouraria"
-  | "igreja_secretaria";
+  | "igreja_secretaria"
+  | "igreja_cantina"
+  | "igreja_livraria"
+  | "igreja_social";
+
+export type LabModuleId =
+  | "igreja_cantina"
+  | "igreja_livraria"
+  | "igreja_social";
+
+export type LabLifecycleStage = "em_incubacao" | "em_aprovacao" | "promovido";
+export type LabCommercialModel = "pacote_padrao" | "addon";
+
+export interface LabModulePromotion {
+  moduleId: LabModuleId;
+  stage: LabLifecycleStage;
+  promotedToCatalog: boolean;
+  commercialModel: LabCommercialModel;
+  addonMonthlyPrice: number;
+  notes?: string;
+  promotedAt?: string;
+}
 
 export type CommerceModuleId =
   | "comercio_tesouraria"
@@ -109,7 +130,8 @@ export interface ModuleDefinition {
   name: string;
   shortName: string;
   description: string;
-  maturity: "producao" | "preview";
+  maturity: "producao" | "preview" | "labs";
+  isLabModule?: boolean;
   systemFolder: string;
 }
 

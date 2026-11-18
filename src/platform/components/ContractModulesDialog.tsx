@@ -6,7 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlatformContract, ModuleId, ContractStatus, ContractLegalStatus, PricingTier } from "@/platform/types";
+import { PlatformContract, ModuleId, ContractStatus, ContractLegalStatus, PricingTier, LabModuleId } from "@/platform/types";
+import type { LabPromotionsMap } from "@/platform/labs/labsTypes";
+import { Badge } from "@/components/ui/badge";
 import { getModulesBySegment } from "@/platform/catalog";
 import {
   calculateTieredPrice,
@@ -21,11 +23,12 @@ import { contractPublicUrl, normalizeContractSlug, usePlatformOrigin, validateCo
 interface Props {
   contract: PlatformContract | null;
   pricingTiers?: PricingTier[];
+  labPromotions?: LabPromotionsMap;
   onClose: () => void;
   onSave: (id: string, patch: Partial<PlatformContract>) => Promise<void>;
   brandingOnly?: boolean;
 }
-export const ContractModulesDialog = ({ contract, pricingTiers = DEFAULT_PRICING_TIERS, onClose, onSave, brandingOnly = false }: Props) => {
+export const ContractModulesDialog = ({ contract, pricingTiers = DEFAULT_PRICING_TIERS, labPromotions, onClose, onSave, brandingOnly = false }: Props) => {
   const { toast } = useToast();
   const { origin: platformOrigin } = usePlatformOrigin();
   const [draft, setDraft] = useState<Partial<PlatformContract>>({});
@@ -111,7 +114,34 @@ export const ContractModulesDialog = ({ contract, pricingTiers = DEFAULT_PRICING
             Cálculo sugerido pela tabela ({tierCalc.tier.name}): <strong>{tierCalc.ruleLabel} = {formatBRL(tierCalc.totalMonthly)}/mês</strong>
           </p>
           <Label>Módulos ativos</Label>
-          <div className="space-y-2">{getModulesBySegment(contract.segment).map((m) => <label key={m.id} className="flex gap-2 items-center text-sm"><Checkbox checked={draft.activeModules?.includes(m.id)} onCheckedChange={(checked) => field("activeModules", checked ? [...(draft.activeModules ?? []), m.id] : (draft.activeModules ?? []).filter((x: ModuleId) => x !== m.id))} />{m.name}</label>)}</div>
+          <div className="space-y-2">
+            {getModulesBySegment(contract.segment, labPromotions).map((m) => {
+              const promo = m.isLabModule ? labPromotions?.[m.id as LabModuleId] : undefined;
+              return (
+                <label key={m.id} className="flex gap-2 items-center text-sm flex-wrap">
+                  <Checkbox
+                    checked={draft.activeModules?.includes(m.id)}
+                    onCheckedChange={(checked) =>
+                      field(
+                        "activeModules",
+                        checked
+                          ? [...(draft.activeModules ?? []), m.id]
+                          : (draft.activeModules ?? []).filter((x: ModuleId) => x !== m.id)
+                      )
+                    }
+                  />
+                  <span>{m.name}</span>
+                  {promo && (
+                    <Badge variant="outline" className="text-[10px]">
+                      {promo.commercialModel === "pacote_padrao"
+                        ? "Pacote Padrão (Labs)"
+                        : `Add-on +${formatBRL(promo.addonMonthlyPrice)}/mês`}
+                    </Badge>
+                  )}
+                </label>
+              );
+            })}
+          </div>
           <Label htmlFor="contract-notes">Notas</Label><Textarea id="contract-notes" value={draft.notes ?? ""} onChange={(e) => field("notes", e.target.value)} />
         </>}
         <div className="border-t pt-4 space-y-3">

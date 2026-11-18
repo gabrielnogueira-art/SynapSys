@@ -1,5 +1,6 @@
 import {
   ChangeRequest,
+  LabModulePromotion,
   ModuleDefinition,
   ModuleId,
   PlatformContract,
@@ -58,6 +59,39 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
     maturity: "preview",
     systemFolder: "GitHub/src/systems/church/ChurchSecretariatPreview.tsx",
   },
+  {
+    id: "igreja_cantina",
+    segment: "igreja",
+    name: "Cantina & Eventos",
+    shortName: "Cantina",
+    description:
+      "Produção inicial por culto/evento, PDV balcão rápido (Dinheiro, PIX, Cartão) e fechamento automático com sobras e quebras.",
+    maturity: "labs",
+    isLabModule: true,
+    systemFolder: "GitHub/src/systems/church/ChurchLabsModules.tsx",
+  },
+  {
+    id: "igreja_livraria",
+    segment: "igreja",
+    name: "Livraria & Materiais da EBD",
+    shortName: "Livraria EBD",
+    description:
+      "Gestão de revistas por trimestre/faixa etária, bíblias/livros com alerta de reposição (< 5 un.), camisetas de congressos e lucro líquido.",
+    maturity: "labs",
+    isLabModule: true,
+    systemFolder: "GitHub/src/systems/church/ChurchLabsModules.tsx",
+  },
+  {
+    id: "igreja_social",
+    segment: "igreja",
+    name: "Ação Social & Cestas Básicas",
+    shortName: "Ação Social",
+    description:
+      "Arrecadação de alimentos por campanha, montagem de cestas com baixa automática de insumos e entrega assistida sem duplicidade mensal.",
+    maturity: "labs",
+    isLabModule: true,
+    systemFolder: "GitHub/src/systems/church/ChurchLabsModules.tsx",
+  },
 
   // Segmento Comércio & Empresas (projeto distinto)
   {
@@ -112,8 +146,27 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
   },
 ];
 
-export function getModulesBySegment(segment: ProjectSegment): ModuleDefinition[] {
-  return MODULE_CATALOG.filter((m) => m.segment === segment);
+export function isModuleVisibleInOfficialCatalog(
+  mod: ModuleDefinition,
+  promotions?: Partial<Record<string, LabModulePromotion>>
+): boolean {
+  if (!mod.isLabModule) return true;
+  return Boolean(promotions?.[mod.id]?.promotedToCatalog);
+}
+
+export function getOfficialCatalogModules(
+  promotions?: Partial<Record<string, LabModulePromotion>>
+): ModuleDefinition[] {
+  return MODULE_CATALOG.filter((m) => isModuleVisibleInOfficialCatalog(m, promotions));
+}
+
+export function getModulesBySegment(
+  segment: ProjectSegment,
+  promotions?: Partial<Record<string, LabModulePromotion>>
+): ModuleDefinition[] {
+  return MODULE_CATALOG.filter(
+    (m) => m.segment === segment && isModuleVisibleInOfficialCatalog(m, promotions)
+  );
 }
 
 export function getModuleById(id: ModuleId): ModuleDefinition | undefined {

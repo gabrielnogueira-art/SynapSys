@@ -10,6 +10,7 @@ import {
   Copy,
   Database,
   FileCheck2,
+  HandHeart,
   Hash,
   Landmark,
   Layers,
@@ -24,6 +25,7 @@ import {
   Sparkles,
   Store,
   Users,
+  UtensilsCrossed,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,10 +42,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PlatformBrand } from "@/platform/components/PlatformBrand";
-import { MODULE_CATALOG } from "@/platform/catalog";
+import { getOfficialCatalogModules } from "@/platform/catalog";
 import { ModuleId, ProjectSegment } from "@/platform/types";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useToast } from "@/hooks/use-toast";
+
+const OFFICIAL_MODULES = getOfficialCatalogModules();
 
 type NavSectionId = "home" | "quem-somos" | "produtos" | "contatos";
 
@@ -105,6 +109,21 @@ const PRODUCT_HIGHLIGHTS: Record<ModuleId, string[]> = {
     "Ficha completa com cônjuge e listas editáveis no banco",
     "Emissão de cartas/documentos e agenda ministerial",
   ],
+  igreja_cantina: [
+    "Produção inicial por culto/evento e controle de sobras",
+    "PDV balcão rápido em PIX, Dinheiro e Cartão",
+    "Fechamento automático de caixa com quebras e desperdício",
+  ],
+  igreja_livraria: [
+    "Revistas EBD por trimestre, faixa etária e Aluno vs Mestre",
+    "Alerta de estoque mínimo e gestão de camisetas/congressos",
+    "Apuração de custo de editora vs lucro líquido",
+  ],
+  igreja_social: [
+    "Entrada de alimentos por campanha e despensa avulsa",
+    "Montagem de cestas básicas com baixa automática de insumos",
+    "Controle de famílias assistidas sem duplicidade mensal",
+  ],
   comercio_tesouraria: [
     "Fluxo de caixa diário e conciliação bancária",
     "Contas a pagar e receber por centro de custo",
@@ -135,6 +154,7 @@ const PRODUCT_HIGHLIGHTS: Record<ModuleId, string[]> = {
 function MODULE_ICON(id: ModuleId) {
   switch (id) {
     case "igreja_ebd":
+    case "igreja_livraria":
       return <BookOpen className="h-5 w-5" />;
     case "igreja_tesouraria":
     case "comercio_tesouraria":
@@ -142,6 +162,10 @@ function MODULE_ICON(id: ModuleId) {
     case "igreja_secretaria":
     case "comercio_secretaria":
       return <Building2 className="h-5 w-5" />;
+    case "igreja_cantina":
+      return <UtensilsCrossed className="h-5 w-5" />;
+    case "igreja_social":
+      return <HandHeart className="h-5 w-5" />;
     case "comercio_estoque":
       return <Package className="h-5 w-5" />;
     case "comercio_rh":
@@ -321,12 +345,12 @@ export const SynapSysSite = () => {
   };
 
   const filteredProducts = useMemo(() => {
-    if (productFilter === "all") return MODULE_CATALOG;
-    return MODULE_CATALOG.filter((m) => m.segment === productFilter);
+    if (productFilter === "all") return OFFICIAL_MODULES;
+    return OFFICIAL_MODULES.filter((m) => m.segment === productFilter);
   }, [productFilter]);
 
   const handleInterestInProduct = (modId: ModuleId) => {
-    const mod = MODULE_CATALOG.find((m) => m.id === modId);
+    const mod = OFFICIAL_MODULES.find((m) => m.id === modId);
     if (!mod) return;
     setSelectedProduct(modId);
     setContactSegment(mod.segment);
@@ -361,7 +385,7 @@ export const SynapSysSite = () => {
   };
 
   const activeModuleDef = useMemo(
-    () => MODULE_CATALOG.find((m) => m.id === selectedProduct) ?? MODULE_CATALOG[0],
+    () => OFFICIAL_MODULES.find((m) => m.id === selectedProduct) ?? OFFICIAL_MODULES[0],
     [selectedProduct]
   );
 
@@ -1295,7 +1319,7 @@ export const SynapSysSite = () => {
                             <SelectItem value="Plataforma Completa">
                               Plataforma Completa (Multi-Módulos)
                             </SelectItem>
-                            {MODULE_CATALOG.map((m) => (
+                            {OFFICIAL_MODULES.map((m) => (
                               <SelectItem key={m.id} value={m.name}>
                                 {m.name}
                               </SelectItem>

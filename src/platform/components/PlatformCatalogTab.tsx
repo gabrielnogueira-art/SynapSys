@@ -3,14 +3,17 @@ import { Badge } from "@/components/ui/badge";
 import { Church, FolderTree, ShieldAlert, Store } from "lucide-react";
 import { getModulesBySegment, SEGMENT_DEFINITIONS } from "@/platform/catalog";
 import { PlatformContract } from "@/platform/types";
+import type { LabPromotionsMap } from "@/platform/labs/labsTypes";
 
 export const PlatformCatalogTab = ({
   contracts,
+  labPromotions,
 }: {
   contracts: PlatformContract[];
+  labPromotions?: LabPromotionsMap;
 }) => {
-  const churchModules = getModulesBySegment("igreja");
-  const commerceModules = getModulesBySegment("comercio");
+  const churchModules = getModulesBySegment("igreja", labPromotions);
+  const commerceModules = getModulesBySegment("comercio", labPromotions);
 
   return (
     <div className="space-y-6">
@@ -72,7 +75,11 @@ export const PlatformCatalogTab = ({
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-sm">{mod.name}</span>
                   <Badge variant={mod.maturity === "producao" ? "default" : "secondary"}>
-                    {mod.maturity === "producao" ? "Em Produção" : "Preview Estruturado"}
+                    {mod.maturity === "producao"
+                      ? "Em Produção"
+                      : mod.maturity === "labs"
+                      ? "Promovido do Labs"
+                      : "Preview Estruturado"}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">{mod.description}</p>

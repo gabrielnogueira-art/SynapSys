@@ -339,6 +339,7 @@ export const ContractRouter = () => {
               </div>
               <ContractModulesDialog
                 contract={contract}
+                labPromotions={store.labPromotions}
                 brandingOnly={role.role !== "master"}
                 onClose={goBackOrContract}
                 onSave={async (id, patch) => {
