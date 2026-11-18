@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import {
   Rocket,
   RotateCcw,
   ShieldCheck,
+  UserCheck,
   UserCog,
   UtensilsCrossed,
 } from "lucide-react";
@@ -35,6 +36,7 @@ import type {
 } from "@/platform/labs/labsTypes";
 import { CantinaWorkspace } from "@/systems/church/modules/CantinaWorkspace";
 import { LivrariaWorkspace } from "@/systems/church/modules/LivrariaWorkspace";
+import { MembroWorkspace } from "@/systems/church/modules/MembroWorkspace";
 import { SocialWorkspace } from "@/systems/church/modules/SocialWorkspace";
 import { formatBRL } from "@/platform/saasDefaults";
 import { useToast } from "@/hooks/use-toast";
@@ -71,6 +73,12 @@ const LAB_MODULES: Array<{
     subtitle: "Campanhas, montagem com baixa automática de insumos e trava mensal",
     icon: <HandHeart className="h-5 w-5" />,
   },
+  {
+    id: "igreja_membro",
+    title: "Portal do Membro & Dízimos",
+    subtitle: "Carteirinha (Secretaria+EBD), leitor PIX e recibo dinâmico",
+    icon: <UserCheck className="h-5 w-5" />,
+  },
 ];
 
 const STAGE_META: Record<
@@ -104,6 +112,10 @@ export const PlatformLabsTab = ({
   const [priceDraft, setPriceDraft] = useState<string>(
     String(activePromo.addonMonthlyPrice.toFixed(2))
   );
+
+  useEffect(() => {
+    setPriceDraft(String(activePromo.addonMonthlyPrice.toFixed(2)));
+  }, [activeId, activePromo.addonMonthlyPrice]);
 
   const handleSelectModule = (modId: LabModuleId) => {
     setPriceDraft(String(promotions[modId].addonMonthlyPrice.toFixed(2)));
@@ -210,7 +222,7 @@ export const PlatformLabsTab = ({
             </div>
           </div>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {LAB_MODULES.map((m) => {
             const promo = promotions[m.id];
             const stageMeta = STAGE_META[promo.stage];
@@ -401,6 +413,15 @@ export const PlatformLabsTab = ({
           roleMode={sandbox.roleMode}
           isSandbox
           onChange={(social) => void onSaveSandbox({ ...sandbox, social })}
+        />
+      )}
+
+      {activeId === "igreja_membro" && (
+        <MembroWorkspace
+          data={sandbox.membro}
+          roleMode={sandbox.roleMode}
+          isSandbox
+          onChange={(membro) => void onSaveSandbox({ ...sandbox, membro })}
         />
       )}
     </div>

@@ -218,6 +218,7 @@ export const MODULE_ROUTE_SLUGS: Record<ModuleId, string> = {
   igreja_cantina: "cantina",
   igreja_livraria: "livraria",
   igreja_social: "acao-social",
+  igreja_membro: "portal-membro",
   comercio_tesouraria: "tesouraria",
   comercio_secretaria: "secretaria",
   comercio_estoque: "estoque",

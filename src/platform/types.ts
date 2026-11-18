@@ -6,12 +6,14 @@ export type ChurchModuleId =
   | "igreja_secretaria"
   | "igreja_cantina"
   | "igreja_livraria"
-  | "igreja_social";
+  | "igreja_social"
+  | "igreja_membro";
 
 export type LabModuleId =
   | "igreja_cantina"
   | "igreja_livraria"
-  | "igreja_social";
+  | "igreja_social"
+  | "igreja_membro";
 
 export type LabLifecycleStage = "em_incubacao" | "em_aprovacao" | "promovido";
 export type LabCommercialModel = "pacote_padrao" | "addon";

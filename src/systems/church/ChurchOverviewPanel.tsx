@@ -10,6 +10,7 @@ import {
   HandHeart,
   Landmark,
   Sparkles,
+  UserCheck,
   UtensilsCrossed,
 } from "lucide-react";
 import { ChurchModuleId, PlatformContract } from "@/platform/types";
@@ -65,6 +66,12 @@ const AREA_META: Record<
     accent: "border-teal-200 bg-teal-50/40",
     summary: "Arrecadações por campanha, montagem de cestas e entregas sem duplicidade mensal.",
     highlights: ["Despensa & Primícias", "Montagem de Cestas", "Famílias Assistidas"],
+  },
+  igreja_membro: {
+    icon: <UserCheck className="h-6 w-6 text-cyan-600" />,
+    accent: "border-cyan-200 bg-cyan-50/40",
+    summary: "Portal self-service do membro: ficha, classe da EBD, linha do tempo de dízimos e recibo digital.",
+    highlights: ["Carteirinha + EBD", "Leitor de PIX", "Recibo Sob Demanda"],
   },
 };
 

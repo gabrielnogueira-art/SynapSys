@@ -123,6 +123,11 @@ const MODULE_LEVEL_OPTIONS: Record<ModuleId, Array<{ value: string; label: strin
     { value: "operador", label: "Diácono / Operador Entregas" },
     { value: "voluntario", label: "Voluntário (Consulta)" },
   ],
+  igreja_membro: [
+    { value: "admin", label: "Administrador / Tesouraria (Conciliar)" },
+    { value: "operador", label: "Tesoureiro (Conferência PIX)" },
+    { value: "voluntario", label: "Membro (Somente Área do Membro)" },
+  ],
   comercio_tesouraria: [
     { value: "admin", label: "Gestor (Total)" },
     { value: "operador", label: "Operador" },

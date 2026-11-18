@@ -124,6 +124,11 @@ const PRODUCT_HIGHLIGHTS: Record<ModuleId, string[]> = {
     "Montagem de cestas básicas com baixa automática de insumos",
     "Controle de famílias assistidas sem duplicidade mensal",
   ],
+  igreja_membro: [
+    "Carteirinha digital integrada Secretaria + Classe EBD",
+    "Linha do tempo anual de dízimos e entrega com leitura PIX",
+    "Recibo dinâmico em PDF/WhatsApp sem armazenar arquivos",
+  ],
   comercio_tesouraria: [
     "Fluxo de caixa diário e conciliação bancária",
     "Contas a pagar e receber por centro de custo",
@@ -168,6 +173,7 @@ function MODULE_ICON(id: ModuleId) {
       return <HandHeart className="h-5 w-5" />;
     case "comercio_estoque":
       return <Package className="h-5 w-5" />;
+    case "igreja_membro":
     case "comercio_rh":
       return <Users className="h-5 w-5" />;
     case "comercio_pdv":

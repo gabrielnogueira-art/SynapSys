@@ -92,6 +92,17 @@ export const MODULE_CATALOG: ModuleDefinition[] = [
     isLabModule: true,
     systemFolder: "GitHub/src/systems/church/ChurchLabsModules.tsx",
   },
+  {
+    id: "igreja_membro",
+    segment: "igreja",
+    name: "Portal do Membro & Dízimos Digitais",
+    shortName: "Portal Membro",
+    description:
+      "Carteirinha digital (Secretaria + EBD), linha do tempo anual de dízimos, leitor inteligente de comprovante PIX e recibo dinâmico sem salvar arquivos.",
+    maturity: "labs",
+    isLabModule: true,
+    systemFolder: "GitHub/src/systems/church/modules/MembroWorkspace.tsx",
+  },
 
   // Segmento Comércio & Empresas (projeto distinto)
   {

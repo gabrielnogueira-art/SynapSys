@@ -31,6 +31,7 @@ import { ChurchOverviewPanel } from "@/systems/church/ChurchOverviewPanel";
 import {
   ChurchCantinaContractView,
   ChurchLivrariaContractView,
+  ChurchMembroContractView,
   ChurchSocialContractView,
 } from "@/systems/church/modules/ChurchLabContractAdapters";
 import { ContractBanner } from "@/platform/components/ContractBanner";
@@ -140,6 +141,8 @@ export const ChurchWorkspace = ({ contract, overrides, initialArea }: ChurchWork
               <UtensilsCrossed className="h-4 w-4" />
             ) : modId === "igreja_social" ? (
               <HandHeart className="h-4 w-4" />
+            ) : modId === "igreja_membro" ? (
+              <UserCheck className="h-4 w-4" />
             ) : (
               <Building2 className="h-4 w-4" />
             );
@@ -157,7 +160,8 @@ export const ChurchWorkspace = ({ contract, overrides, initialArea }: ChurchWork
     if (
       effectiveArea === "igreja_cantina" ||
       effectiveArea === "igreja_livraria" ||
-      effectiveArea === "igreja_social"
+      effectiveArea === "igreja_social" ||
+      effectiveArea === "igreja_membro"
     ) {
       const mod = getModuleById(effectiveArea);
       const icon =
@@ -165,8 +169,10 @@ export const ChurchWorkspace = ({ contract, overrides, initialArea }: ChurchWork
           <UtensilsCrossed className="h-4 w-4" />
         ) : effectiveArea === "igreja_livraria" ? (
           <BookOpen className="h-4 w-4" />
-        ) : (
+        ) : effectiveArea === "igreja_social" ? (
           <HandHeart className="h-4 w-4" />
+        ) : (
+          <UserCheck className="h-4 w-4" />
         );
       return [
         ...items,
@@ -436,6 +442,12 @@ export const ChurchWorkspace = ({ contract, overrides, initialArea }: ChurchWork
           <ChurchSocialContractView
             contractId={contract.id}
             moduleLevel={effectiveLevels?.igreja_social}
+          />
+        )}
+        {effectiveArea === "igreja_membro" && (
+          <ChurchMembroContractView
+            contractId={contract.id}
+            moduleLevel={effectiveLevels?.igreja_membro}
           />
         )}
       </ClientShell>

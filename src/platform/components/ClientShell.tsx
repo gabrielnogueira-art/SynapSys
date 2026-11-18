@@ -66,6 +66,7 @@ const MODULE_ICON: Record<ModuleId, ReactNode> = {
   igreja_cantina: <UtensilsCrossed className="h-5 w-5" />,
   igreja_livraria: <BookOpen className="h-5 w-5" />,
   igreja_social: <HandHeart className="h-5 w-5" />,
+  igreja_membro: <User className="h-5 w-5" />,
   comercio_tesouraria: <DollarSign className="h-5 w-5" />,
   comercio_secretaria: <Briefcase className="h-5 w-5" />,
   comercio_estoque: <Package className="h-5 w-5" />,

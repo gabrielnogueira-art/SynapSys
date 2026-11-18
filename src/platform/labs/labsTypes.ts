@@ -173,6 +173,68 @@ export interface SocialData {
 }
 
 // ======================================================
+// D. MÓDULO PORTAL DO MEMBRO & DÍZIMOS DIGITAIS
+// ======================================================
+export interface ChurchPixConfig {
+  churchName: string;
+  churchCnpj: string;
+  pixKey: string;
+  pixKeyType: "cnpj" | "email" | "telefone" | "aleatoria";
+  bankName: string;
+}
+
+export interface MemberPortalProfile {
+  id: string;
+  matricula: string;
+  fullName: string;
+  cpfMasked: string;
+  birthDate: string;
+  baptismDate?: string;
+  address: string;
+  phone: string;
+  email: string;
+  ecclesiasticalRole: string;
+  congregation: string;
+  maritalStatus: string;
+  spouseName?: string;
+  ebdClassName: string;
+  ebdTeachers: string;
+  ebdAttendanceSummary: string;
+}
+
+export type TitheReconciliationStatus = "aguardando_conferencia" | "conciliado";
+
+export interface DigitalTitheRecord {
+  id: string;
+  receiptNumber: string;
+  memberId: string;
+  matricula: string;
+  memberName: string;
+  memberRole: string;
+  congregation: string;
+  competenceMonth: string; // YYYY-MM
+  amount: number;
+  paidAtIso: string; // YYYY-MM-DD HH:mm
+  paymentMethod: "PIX" | "Dinheiro" | "Cartao";
+  e2eCode: string;
+  bankOrigin?: string;
+  verifiedRecipient: boolean;
+  recipientWarning?: string;
+  status: TitheReconciliationStatus;
+  reconciledBy?: string;
+  reconciledAt?: string;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface MembroPortalData {
+  churchPixConfig: ChurchPixConfig;
+  members: MemberPortalProfile[];
+  activeMemberId: string;
+  tithes: DigitalTitheRecord[];
+}
+
+// ======================================================
 // SANDBOX DO SYNAPSYS LABS
 // ======================================================
 export interface LabsSandboxState {
@@ -181,6 +243,7 @@ export interface LabsSandboxState {
   cantina: CantinaData;
   livraria: LivrariaData;
   social: SocialData;
+  membro: MembroPortalData;
   updatedAt: string;
 }
 

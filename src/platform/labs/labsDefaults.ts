@@ -4,10 +4,12 @@ import type {
   CantinaEvent,
   CantinaItem,
   CantinaSale,
+  DigitalTitheRecord,
   LabPromotionsMap,
   LabRoleMode,
   LabsSandboxState,
   LivrariaData,
+  MembroPortalData,
   SocialData,
   SocialDelivery,
 } from "./labsTypes";
@@ -38,6 +40,14 @@ export const DEFAULT_LAB_PROMOTIONS: LabPromotionsMap = {
     addonMonthlyPrice: 39.9,
     notes: "Campanhas de alimentos, montagem automática de cestas e entregas com trava mensal por família.",
   },
+  igreja_membro: {
+    moduleId: "igreja_membro",
+    stage: "em_incubacao",
+    promotedToCatalog: false,
+    commercialModel: "pacote_padrao",
+    addonMonthlyPrice: 49.9,
+    notes: "Área do Membro + Carteirinha integrada Secretaria/EBD + Leitor PIX + Recibo sob demanda (Zero File Storage).",
+  },
 };
 
 export function createEmptyCantinaData(): CantinaData {
@@ -46,6 +56,122 @@ export function createEmptyCantinaData(): CantinaData {
 
 export function createEmptyLivrariaData(): LivrariaData {
   return { products: [], sales: [], expenses: [] };
+}
+
+export function createEmptyMembroData(): MembroPortalData {
+  return {
+    churchPixConfig: {
+      churchName: "Assembleia de Deus Ministério Madureira",
+      churchCnpj: "",
+      pixKey: "",
+      pixKeyType: "cnpj",
+      bankName: "Banco Cora / Nubank PJ",
+    },
+    members: [],
+    activeMemberId: "",
+    tithes: [],
+  };
+}
+
+export function createSeedMembroData(today = todayIsoDate()): MembroPortalData {
+  const year = today.slice(0, 4);
+  const currentMonth = Number(today.slice(5, 7)) || 11;
+  const seedMonths = [1, 2, 3, 4, 6, 8, 9].filter((m) => m < currentMonth);
+
+  const tithes: DigitalTitheRecord[] = seedMonths.map((m, idx) => {
+    const mm = String(m).padStart(2, "0");
+    return {
+      id: `dz-seed-${m}`,
+      receiptNumber: `DZ-${year}-${String(101 + idx).padStart(4, "0")}`,
+      memberId: "mem-gabriel",
+      matricula: "3686",
+      memberName: "Gabriel Nogueira da Silva",
+      memberRole: "Obreiro / Diácono",
+      congregation: "Igreja Sede",
+      competenceMonth: `${year}-${mm}`,
+      amount: m % 2 === 0 ? 350 : 320,
+      paidAtIso: `${year}-${mm}-08 19:40`,
+      paymentMethod: "PIX",
+      e2eCode: `E18236120${year}${mm}081940SEED${100 + idx}`,
+      bankOrigin: idx % 2 === 0 ? "Nubank" : "Itaú",
+      verifiedRecipient: true,
+      status: "conciliado",
+      reconciledBy: "Tesouraria Sede",
+      reconciledAt: `${year}-${mm}-09`,
+      createdAt: `${year}-${mm}-08`,
+    };
+  });
+
+  if (currentMonth > 10) {
+    tithes.unshift({
+      id: "dz-seed-pend",
+      receiptNumber: `DZ-${year}-0199`,
+      memberId: "mem-maria",
+      matricula: "3687",
+      memberName: "Maria Oliveira Costa",
+      memberRole: "Membro",
+      congregation: "Igreja Sede",
+      competenceMonth: `${year}-${String(currentMonth).padStart(2, "0")}`,
+      amount: 480,
+      paidAtIso: `${today} 09:45`,
+      paymentMethod: "PIX",
+      e2eCode: `E60701190${year}${String(currentMonth).padStart(2, "0")}180945ITAU883120`,
+      bankOrigin: "Itaú",
+      verifiedRecipient: true,
+      status: "aguardando_conferencia",
+      createdAt: today,
+    });
+  }
+
+  return {
+    churchPixConfig: {
+      churchName: "Assembleia de Deus Ministério Madureira",
+      churchCnpj: "12.345.678/0001-90",
+      pixKey: "12.345.678/0001-90",
+      pixKeyType: "cnpj",
+      bankName: "Banco Cora / Nubank PJ",
+    },
+    activeMemberId: "mem-gabriel",
+    members: [
+      {
+        id: "mem-gabriel",
+        matricula: "3686",
+        fullName: "Gabriel Nogueira da Silva",
+        cpfMasked: "***.458.912-**",
+        birthDate: "1996-05-14",
+        baptismDate: "2012-10-21",
+        address: "Rua das Palmeiras, 240 — Centro",
+        phone: "(21) 99812-3686",
+        email: "gabriel.membro@igreja.org",
+        ecclesiasticalRole: "Obreiro / Diácono",
+        congregation: "Igreja Sede",
+        maritalStatus: "Casado(a)",
+        spouseName: "Ana Paula Nogueira (#3685)",
+        ebdClassName: "Adultos — Classe Bereia",
+        ebdTeachers: "Pr. Marcos Oliveira & Pb. Lucas Souza",
+        ebdAttendanceSummary: "10 presenças nos últimos 12 domingos (83%)",
+      },
+      {
+        id: "mem-maria",
+        matricula: "3687",
+        fullName: "Maria Oliveira Costa",
+        cpfMasked: "***.721.304-**",
+        birthDate: "1989-11-02",
+        baptismDate: "2008-04-13",
+        address: "Av. Central, 1105 — Vila Nova",
+        phone: "(21) 98845-3687",
+        email: "maria.costa@igreja.org",
+        ecclesiasticalRole: "Membro",
+        congregation: "Igreja Sede",
+        maritalStatus: "Casado(a)",
+        spouseName: "João Batista Costa (#3688)",
+        ebdClassName: "Jovens & Casais — Classe Efésios",
+        ebdTeachers: "Dc. Fernanda Lima",
+        ebdAttendanceSummary: "11 presenças nos últimos 12 domingos (92%)",
+      },
+    ],
+    tithes,
+  };
 }
 
 export function createEmptySocialData(): SocialData {
@@ -329,6 +455,7 @@ export function createSeedLabsSandbox(today = todayIsoDate()): LabsSandboxState 
     cantina: createSeedCantinaData(today),
     livraria: createSeedLivrariaData(today),
     social: createSeedSocialData(today),
+    membro: createSeedMembroData(today),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -352,6 +479,10 @@ export function clearLabsTransactionsOnly(state: LabsSandboxState): LabsSandboxS
       donations: [],
       assemblies: [],
       deliveries: [],
+    },
+    membro: {
+      ...state.membro,
+      tithes: [],
     },
     updatedAt: new Date().toISOString(),
   };
@@ -382,6 +513,7 @@ export function normalizeLabPromotions(raw: unknown): LabPromotionsMap {
     igreja_cantina: normalizeOne("igreja_cantina"),
     igreja_livraria: normalizeOne("igreja_livraria"),
     igreja_social: normalizeOne("igreja_social"),
+    igreja_membro: normalizeOne("igreja_membro"),
   };
 }
 
@@ -390,7 +522,9 @@ export function normalizeLabsSandboxState(raw: unknown): LabsSandboxState {
   if (!raw || typeof raw !== "object") return seed;
   const r = raw as Record<string, unknown>;
   const activeModule: LabModuleId =
-    r.activeModule === "igreja_livraria" || r.activeModule === "igreja_social"
+    r.activeModule === "igreja_livraria" ||
+    r.activeModule === "igreja_social" ||
+    r.activeModule === "igreja_membro"
       ? r.activeModule
       : "igreja_cantina";
   const roleMode: LabRoleMode =
@@ -450,6 +584,26 @@ export function normalizeLabsSandboxState(raw: unknown): LabsSandboxState {
               : seed.social.deliveries,
           }
         : seed.social,
+    membro:
+      r.membro && typeof r.membro === "object"
+        ? {
+            churchPixConfig:
+              (r.membro as MembroPortalData).churchPixConfig &&
+              typeof (r.membro as MembroPortalData).churchPixConfig === "object"
+                ? (r.membro as MembroPortalData).churchPixConfig
+                : seed.membro.churchPixConfig,
+            members: Array.isArray((r.membro as MembroPortalData).members)
+              ? (r.membro as MembroPortalData).members
+              : seed.membro.members,
+            activeMemberId:
+              typeof (r.membro as MembroPortalData).activeMemberId === "string"
+                ? (r.membro as MembroPortalData).activeMemberId
+                : seed.membro.activeMemberId,
+            tithes: Array.isArray((r.membro as MembroPortalData).tithes)
+              ? (r.membro as MembroPortalData).tithes
+              : seed.membro.tithes,
+          }
+        : seed.membro,
     updatedAt: typeof r.updatedAt === "string" ? r.updatedAt : seed.updatedAt,
   };
 }
@@ -718,3 +872,65 @@ export function validateSocialDelivery(
   }
   return { ok: true, competenceMonth };
 }
+
+export interface AnnualMonthSlot {
+  monthIndex: number; // 1..12
+  competenceMonth: string; // YYYY-MM
+  shortLabel: string;
+  tithe: DigitalTitheRecord | null;
+  status: "conciliado" | "aguardando_conferencia" | "em_aberto";
+}
+
+const MONTH_SHORT_PT = [
+  "Jan",
+  "Fev",
+  "Mar",
+  "Abr",
+  "Mai",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Set",
+  "Out",
+  "Nov",
+  "Dez",
+];
+
+export function buildMemberAnnualTimeline(
+  tithes: DigitalTitheRecord[],
+  memberId: string,
+  year: number
+): AnnualMonthSlot[] {
+  const yearPrefix = `${year}-`;
+  const memberTithes = tithes.filter(
+    (t) => t.memberId === memberId && t.competenceMonth.startsWith(yearPrefix)
+  );
+
+  return MONTH_SHORT_PT.map((shortLabel, idx) => {
+    const mNum = idx + 1;
+    const competenceMonth = `${year}-${String(mNum).padStart(2, "0")}`;
+    const matching = memberTithes.filter((t) => t.competenceMonth === competenceMonth);
+    const chosen =
+      matching.find((t) => t.status === "conciliado") ?? matching[0] ?? null;
+
+    return {
+      monthIndex: mNum,
+      competenceMonth,
+      shortLabel,
+      tithe: chosen,
+      status: chosen ? chosen.status : "em_aberto",
+    };
+  });
+}
+
+export function nextTitheReceiptNumber(
+  tithes: DigitalTitheRecord[],
+  year = new Date().getFullYear()
+): string {
+  const maxSeq = tithes.reduce((max, t) => {
+    const m = t.receiptNumber.match(/(\d+)$/);
+    return Math.max(max, m ? parseInt(m[1], 10) : 0);
+  }, 200);
+  return `DZ-${year}-${String(maxSeq + 1).padStart(4, "0")}`;
+}
+
