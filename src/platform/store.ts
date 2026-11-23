@@ -281,6 +281,15 @@ export async function reloadPlatformStore() {
               d.moduleLevels && typeof d.moduleLevels === "object"
                 ? (d.moduleLevels as Partial<Record<ModuleId, string>>)
                 : overrideLevels;
+            const overrideCongregation =
+              ctr?.memberCongregationOverrides?.[r.id] ??
+              (emailLower ? ctr?.memberCongregationOverrides?.[emailLower] : undefined);
+            const assignedCongregation =
+              typeof d.assignedCongregation === "string" && d.assignedCongregation.trim()
+                ? d.assignedCongregation.trim()
+                : typeof overrideCongregation === "string" && overrideCongregation.trim()
+                ? overrideCongregation.trim()
+                : undefined;
             return {
               id: r.id,
               name: (typeof d.name === "string" && d.name) || emailStr || "Usuário",
@@ -292,6 +301,7 @@ export async function reloadPlatformStore() {
               status: (r.status === "pendente" || r.status === "bloqueado" ? r.status : "ativo") as PlatformUser["status"],
               allowedModules,
               moduleLevels,
+              assignedCongregation,
               ebdAdmin: typeof d.ebdAdmin === "boolean" ? d.ebdAdmin : r.access_level === "gestor_contrato",
               notes: typeof d.notes === "string" ? d.notes : undefined,
               createdAt: String(r.created_at).slice(0, 10),
@@ -509,7 +519,11 @@ export function usePlatformStore() {
     await done();
     const needsFallbackModules = Boolean(input.allowedModules && input.allowedModules.length > 0);
     const needsFallbackLevels = Boolean(input.moduleLevels && Object.keys(input.moduleLevels).length > 0);
-    if ((needsFallbackModules || needsFallbackLevels) && (await isCurrentUserSupabaseMaster())) {
+    const needsFallbackCongregation = Boolean(input.assignedCongregation?.trim());
+    if (
+      (needsFallbackModules || needsFallbackLevels || needsFallbackCongregation) &&
+      (await isCurrentUserSupabaseMaster())
+    ) {
       const created = snapshot.users.find(
         (u) => u.contractId === input.contractId && u.email.toLowerCase() === input.email.trim().toLowerCase()
       );
@@ -528,6 +542,13 @@ export function usePlatformStore() {
           nextContract.memberModuleLevelOverrides = {
             ...(contract.memberModuleLevelOverrides ?? {}),
             [created.id]: input.moduleLevels!,
+          };
+          dirty = true;
+        }
+        if (needsFallbackCongregation && !created.assignedCongregation) {
+          nextContract.memberCongregationOverrides = {
+            ...(contract.memberCongregationOverrides ?? {}),
+            [created.id]: input.assignedCongregation!.trim(),
           };
           dirty = true;
         }
@@ -550,8 +571,13 @@ export function usePlatformStore() {
     accessLevel: UserAccessLevel;
     allowedModules?: ModuleId[];
     moduleLevels?: Partial<Record<ModuleId, string>>;
+    assignedCongregation?: string | null;
     ebdAdmin?: boolean;
   }) => {
+    const cleanCong =
+      typeof input.assignedCongregation === "string" && input.assignedCongregation.trim()
+        ? input.assignedCongregation.trim()
+        : null;
     let remoteOk = false;
     try {
       await callUsers({
@@ -561,6 +587,7 @@ export function usePlatformStore() {
         accessLevel: input.accessLevel,
         allowedModules: input.allowedModules && input.allowedModules.length > 0 ? input.allowedModules : null,
         moduleLevels: input.moduleLevels ?? null,
+        assignedCongregation: cleanCong,
         ebdAdmin: input.ebdAdmin,
       });
       remoteOk = true;
@@ -569,22 +596,34 @@ export function usePlatformStore() {
       if (!isMaster) throw err;
     }
 
-    if (!remoteOk) {
+    const isMasterNow = await isCurrentUserSupabaseMaster();
+    if (!remoteOk || (isMasterNow && "assignedCongregation" in input)) {
       const contract = getContractById(input.contractId);
       if (!contract) throw new Error("Contrato não encontrado");
       const nextOverrides = { ...(contract.memberModuleOverrides ?? {}) };
-      if (input.allowedModules && input.allowedModules.length > 0) {
-        nextOverrides[input.membershipId] = input.allowedModules;
-      } else {
-        delete nextOverrides[input.membershipId];
-        if (input.email) delete nextOverrides[input.email.toLowerCase()];
+      if (!remoteOk) {
+        if (input.allowedModules && input.allowedModules.length > 0) {
+          nextOverrides[input.membershipId] = input.allowedModules;
+        } else {
+          delete nextOverrides[input.membershipId];
+          if (input.email) delete nextOverrides[input.email.toLowerCase()];
+        }
       }
       const nextLevelOverrides = { ...(contract.memberModuleLevelOverrides ?? {}) };
-      if (input.moduleLevels && Object.keys(input.moduleLevels).length > 0) {
-        nextLevelOverrides[input.membershipId] = input.moduleLevels;
+      if (!remoteOk) {
+        if (input.moduleLevels && Object.keys(input.moduleLevels).length > 0) {
+          nextLevelOverrides[input.membershipId] = input.moduleLevels;
+        } else {
+          delete nextLevelOverrides[input.membershipId];
+          if (input.email) delete nextLevelOverrides[input.email.toLowerCase()];
+        }
+      }
+      const nextCongOverrides = { ...(contract.memberCongregationOverrides ?? {}) };
+      if (cleanCong) {
+        nextCongOverrides[input.membershipId] = cleanCong;
       } else {
-        delete nextLevelOverrides[input.membershipId];
-        if (input.email) delete nextLevelOverrides[input.email.toLowerCase()];
+        delete nextCongOverrides[input.membershipId];
+        if (input.email) delete nextCongOverrides[input.email.toLowerCase()];
       }
       check(
         await supabase
@@ -594,6 +633,7 @@ export function usePlatformStore() {
               ...contract,
               memberModuleOverrides: nextOverrides,
               memberModuleLevelOverrides: nextLevelOverrides,
+              memberCongregationOverrides: nextCongOverrides,
             }),
           })
           .eq("id", contract.id)
@@ -610,8 +650,13 @@ export function usePlatformStore() {
     roleLabel: string;
     allowedModules?: ModuleId[];
     moduleLevels?: Partial<Record<ModuleId, string>>;
+    assignedCongregation?: string | null;
     ebdAdmin?: boolean;
   }) => {
+    const cleanCong =
+      typeof input.assignedCongregation === "string" && input.assignedCongregation.trim()
+        ? input.assignedCongregation.trim()
+        : null;
     await callUsers({
       action: "approve_pending",
       pending_id: input.pendingId,
@@ -620,9 +665,35 @@ export function usePlatformStore() {
       roleLabel: input.roleLabel,
       allowedModules: input.allowedModules && input.allowedModules.length > 0 ? input.allowedModules : null,
       moduleLevels: input.moduleLevels ?? null,
+      assignedCongregation: cleanCong,
       ebdAdmin: input.ebdAdmin,
     });
     await done();
+    if (cleanCong && (await isCurrentUserSupabaseMaster())) {
+      const pending = snapshot.pendingRequests.find((p) => p.id === input.pendingId);
+      const emailLower = pending?.email?.toLowerCase();
+      const created = emailLower
+        ? snapshot.users.find(
+            (u) => u.contractId === input.contractId && u.email.toLowerCase() === emailLower
+          )
+        : undefined;
+      const contract = getContractById(input.contractId);
+      if (created && !created.assignedCongregation && contract) {
+        await supabase
+          .from("platform_contracts")
+          .update({
+            data: contractData({
+              ...contract,
+              memberCongregationOverrides: {
+                ...(contract.memberCongregationOverrides ?? {}),
+                [created.id]: cleanCong,
+              },
+            }),
+          })
+          .eq("id", contract.id);
+        await done();
+      }
+    }
     window.dispatchEvent(new Event(PLATFORM_ACCESS_EVENT));
   };
   const rejectPendingUser = async (pendingId: string) => {

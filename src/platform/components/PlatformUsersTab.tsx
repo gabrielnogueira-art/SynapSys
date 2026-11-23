@@ -43,6 +43,7 @@ import {
   X,
 } from "lucide-react";
 import { getModuleById } from "@/platform/catalog";
+import { supabase } from "@/integrations/supabase/client";
 import {
   ModuleId,
   PendingAccessRequest,
@@ -66,6 +67,7 @@ interface PlatformUsersTabProps {
     accessLevel: UserAccessLevel;
     allowedModules?: ModuleId[];
     moduleLevels?: Partial<Record<ModuleId, string>>;
+    assignedCongregation?: string | null;
     ebdAdmin?: boolean;
   }) => Promise<void>;
   onApprovePending?: (input: {
@@ -75,6 +77,7 @@ interface PlatformUsersTabProps {
     roleLabel: string;
     allowedModules?: ModuleId[];
     moduleLevels?: Partial<Record<ModuleId, string>>;
+    assignedCongregation?: string | null;
     ebdAdmin?: boolean;
   }) => Promise<void>;
   onRejectPending?: (pendingId: string) => Promise<void>;
@@ -194,6 +197,7 @@ export const PlatformUsersTab = ({
     contracts[0]?.activeModules ?? []
   );
   const [createModuleLevels, setCreateModuleLevels] = useState<Partial<Record<ModuleId, string>>>({});
+  const [createCongregation, setCreateCongregation] = useState("");
   const [ebdAdmin, setEbdAdmin] = useState(true);
 
   const [editingUser, setEditingUser] = useState<PlatformUser | null>(null);
@@ -202,6 +206,7 @@ export const PlatformUsersTab = ({
   const [editAllModules, setEditAllModules] = useState(true);
   const [editModules, setEditModules] = useState<ModuleId[]>([]);
   const [editModuleLevels, setEditModuleLevels] = useState<Partial<Record<ModuleId, string>>>({});
+  const [editCongregation, setEditCongregation] = useState("");
   const [editEbdAdmin, setEditEbdAdmin] = useState(true);
   const [savingEdit, setSavingEdit] = useState(false);
 
@@ -212,8 +217,11 @@ export const PlatformUsersTab = ({
   const [approveAllModules, setApproveAllModules] = useState(false);
   const [approveModules, setApproveModules] = useState<ModuleId[]>([]);
   const [approveModuleLevels, setApproveModuleLevels] = useState<Partial<Record<ModuleId, string>>>({});
+  const [approveCongregation, setApproveCongregation] = useState("");
   const [approveEbdAdmin, setApproveEbdAdmin] = useState(true);
   const [savingApproval, setSavingApproval] = useState(false);
+
+  const [contractCongregations, setContractCongregations] = useState<Record<string, string[]>>({});
 
   const contractById = useMemo(
     () => new Map(contracts.map((c) => [c.id, c])),
@@ -231,6 +239,54 @@ export const PlatformUsersTab = ({
       setSelectedModules(selectedContract.activeModules);
     }
   }, [contractId, selectedContract]);
+
+  useEffect(() => {
+    const churchIds = contracts
+      .filter((c) => c.segment === "igreja")
+      .map((c) => c.id);
+    if (churchIds.length === 0) return;
+    let active = true;
+    const loadCongregations = async () => {
+      try {
+        const { data: rows } = await supabase
+          .from("platform_module_data")
+          .select("contract_id,module_key,data")
+          .in("contract_id", churchIds)
+          .in("module_key", ["church_members", "church_units", "church_treasury"]);
+        if (!active || !rows) return;
+        const map = new Map<string, Set<string>>();
+        for (const cid of churchIds) {
+          map.set(cid, new Set(["Igreja Sede"]));
+        }
+        for (const row of rows) {
+          const set = map.get(row.contract_id) ?? new Set(["Igreja Sede"]);
+          const raw = row.data as Record<string, unknown> | Array<{ name?: string }> | null;
+          if (row.module_key === "church_units" && Array.isArray(raw)) {
+            raw.forEach((u) => {
+              if (u?.name) set.add(u.name);
+            });
+          } else if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+            const catalogs = raw.catalogs as { congregations?: string[] } | undefined;
+            catalogs?.congregations?.forEach((n) => {
+              if (n) set.add(n);
+            });
+          }
+          map.set(row.contract_id, set);
+        }
+        const out: Record<string, string[]> = {};
+        map.forEach((s, k) => {
+          out[k] = [...s];
+        });
+        setContractCongregations(out);
+      } catch {
+        // ignore optional lookup errors
+      }
+    };
+    void loadCongregations();
+    return () => {
+      active = false;
+    };
+  }, [contracts]);
 
   const scopedPending = useMemo(() => {
     if (singleContract) {
@@ -266,6 +322,7 @@ export const PlatformUsersTab = ({
     setEditAllModules(!hasSubset);
     setEditModules(hasSubset ? u.allowedModules! : active);
     setEditModuleLevels(u.moduleLevels ?? {});
+    setEditCongregation(u.assignedCongregation ?? "");
     setEditEbdAdmin(u.ebdAdmin ?? u.accessLevel === "gestor_contrato");
   };
 
@@ -286,6 +343,7 @@ export const PlatformUsersTab = ({
     setApproveAllModules(!reqMod);
     setApproveModules(reqMod ? [reqMod] : active);
     setApproveModuleLevels({});
+    setApproveCongregation("");
     setApproveEbdAdmin(true);
   };
 
@@ -309,6 +367,7 @@ export const PlatformUsersTab = ({
         accessLevel: editAccessLevel,
         allowedModules: effectiveAllowed,
         moduleLevels: editModuleLevels,
+        assignedCongregation: editCongregation.trim() || null,
         ebdAdmin: editAccessLevel === "professor" ? false : editEbdAdmin,
       });
       toast({ title: "Permissões atualizadas com sucesso" });
@@ -346,6 +405,10 @@ export const PlatformUsersTab = ({
         roleLabel: approveRoleLabel.trim() || ACCESS_LABELS[approveAccessLevel],
         allowedModules: effectiveAllowed,
         moduleLevels: approveModuleLevels,
+        assignedCongregation:
+          ctr.segment === "igreja" && approveCongregation.trim() && approveCongregation !== "__custom__"
+            ? approveCongregation.trim()
+            : null,
         ebdAdmin:
           modsToCheck.includes("igreja_ebd") && approveAccessLevel !== "professor"
             ? approveEbdAdmin
@@ -422,6 +485,12 @@ export const PlatformUsersTab = ({
         status: "ativo",
         allowedModules: allModulesAccess ? undefined : selectedModules,
         moduleLevels: createModuleLevels,
+        assignedCongregation:
+          selectedContract?.segment === "igreja" &&
+          createCongregation.trim() &&
+          createCongregation !== "__custom__"
+            ? createCongregation.trim()
+            : undefined,
         ebdAdmin: createHasEbd && accessLevel !== "professor" ? ebdAdmin : false,
       });
       setName("");
@@ -431,6 +500,7 @@ export const PlatformUsersTab = ({
       setAllModulesAccess(true);
       if (selectedContract) setSelectedModules(selectedContract.activeModules);
       setCreateModuleLevels({});
+      setCreateCongregation("");
       setEbdAdmin(true);
       toast({ title: "Login criado e vinculado ao contrato" });
     } catch (e: unknown) {
@@ -526,6 +596,55 @@ export const PlatformUsersTab = ({
       </div>
     </div>
   );
+
+  const renderCongregationPicker = (
+    targetContract: PlatformContract | undefined,
+    value: string,
+    onChange: (next: string) => void,
+    disabled = false
+  ) => {
+    if (!targetContract || targetContract.segment !== "igreja") return null;
+    const options = contractCongregations[targetContract.id] ?? ["Igreja Sede"];
+    const isCustom =
+      value === "__custom__" || (Boolean(value) && !options.includes(value));
+    const selectValue = isCustom ? "__custom__" : value || "__none__";
+    return (
+      <div className="space-y-1">
+        <Label>Igreja / Congregação do Usuário</Label>
+        <Select
+          value={selectValue}
+          disabled={disabled}
+          onValueChange={(v) => {
+            if (v === "__none__") onChange("");
+            else if (v === "__custom__") onChange("__custom__");
+            else onChange(v);
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Sem vínculo fixo (usa Predefinições)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">Sem vínculo fixo (Predefinição / Sede)</SelectItem>
+            {options.map((cong) => (
+              <SelectItem key={cong} value={cong}>
+                {cong}
+              </SelectItem>
+            ))}
+            <SelectItem value="__custom__">+ Informar outra congregação...</SelectItem>
+          </SelectContent>
+        </Select>
+        {isCustom && (
+          <Input
+            placeholder="Digite o nome da congregação..."
+            value={value === "__custom__" ? "" : value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled}
+            className="mt-1"
+          />
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -642,6 +761,20 @@ export const PlatformUsersTab = ({
                     />
                   </div>
                 </div>
+
+                {selectedContract?.segment === "igreja" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {renderCongregationPicker(
+                      selectedContract,
+                      createCongregation,
+                      setCreateCongregation,
+                      saving
+                    )}
+                    <p className="text-[11px] text-muted-foreground self-end pb-1">
+                      Se vinculada, ao logar na Tesouraria/Secretaria esta congregação já virá preenchida automaticamente nos lançamentos.
+                    </p>
+                  </div>
+                )}
 
                 {selectedContract && selectedContract.activeModules.length > 0 && (
                   <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
@@ -768,7 +901,14 @@ export const PlatformUsersTab = ({
                               )}
                             </TableCell>
                           )}
-                          <TableCell className="text-sm">{u.roleLabel}</TableCell>
+                          <TableCell className="text-sm">
+                            <div>{u.roleLabel}</div>
+                            {u.assignedCongregation && (
+                              <Badge variant="outline" className="text-[10px] mt-0.5 font-normal">
+                                {u.assignedCongregation}
+                              </Badge>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
                               {(!u.allowedModules || u.allowedModules.length === 0) &&
@@ -1016,6 +1156,13 @@ export const PlatformUsersTab = ({
               )}
             </div>
 
+            {renderCongregationPicker(
+              editContract,
+              editCongregation,
+              setEditCongregation,
+              savingEdit
+            )}
+
             {editContract && (
               <div className="rounded-lg border p-3 bg-muted/30 space-y-3">
                 {renderModulePermissionPicker(
@@ -1118,6 +1265,13 @@ export const PlatformUsersTab = ({
                 />
               </div>
             </div>
+
+            {renderCongregationPicker(
+              approveContract,
+              approveCongregation,
+              setApproveCongregation,
+              savingApproval
+            )}
 
             {approveContract && (
               <div className="rounded-lg border p-3 bg-muted/30 space-y-3">

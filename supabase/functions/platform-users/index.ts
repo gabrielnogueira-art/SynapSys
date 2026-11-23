@@ -17,6 +17,10 @@ const VALID_MODULES = [
   "igreja_ebd",
   "igreja_tesouraria",
   "igreja_secretaria",
+  "igreja_cantina",
+  "igreja_livraria",
+  "igreja_social",
+  "igreja_membro",
   "comercio_tesouraria",
   "comercio_secretaria",
   "comercio_estoque",
@@ -37,6 +41,7 @@ const Body = z.discriminatedUnion("action", [
     accessLevel: z.enum(["gestor_contrato", "operador", "professor"]),
     allowedModules: z.array(z.enum(VALID_MODULES)).min(1).optional(),
     moduleLevels: ModuleLevelsSchema,
+    assignedCongregation: z.string().trim().max(120).nullable().optional(),
     ebdAdmin: z.boolean().optional(),
   }),
   z.object({
@@ -46,6 +51,7 @@ const Body = z.discriminatedUnion("action", [
     accessLevel: z.enum(["gestor_contrato", "operador", "professor"]).optional(),
     allowedModules: z.array(z.enum(VALID_MODULES)).min(1).nullable().optional(),
     moduleLevels: ModuleLevelsSchema,
+    assignedCongregation: z.string().trim().max(120).nullable().optional(),
     ebdAdmin: z.boolean().optional(),
   }),
   z.object({
@@ -56,6 +62,7 @@ const Body = z.discriminatedUnion("action", [
     accessLevel: z.enum(["gestor_contrato", "operador", "professor"]),
     allowedModules: z.array(z.enum(VALID_MODULES)).min(1).nullable().optional(),
     moduleLevels: ModuleLevelsSchema,
+    assignedCongregation: z.string().trim().max(120).nullable().optional(),
     ebdAdmin: z.boolean().optional(),
   }),
   z.object({
@@ -179,6 +186,9 @@ Deno.serve(async (req) => {
       if (filteredModules && filteredModules.length > 0) membershipData.allowedModules = filteredModules;
       if (body.moduleLevels && Object.keys(body.moduleLevels).length > 0) {
         membershipData.moduleLevels = body.moduleLevels;
+      }
+      if (body.assignedCongregation) {
+        membershipData.assignedCongregation = body.assignedCongregation;
       }
 
       const { error: mErr } = await admin.from("platform_memberships").insert({
@@ -322,6 +332,9 @@ Deno.serve(async (req) => {
       if (body.moduleLevels && Object.keys(body.moduleLevels).length > 0) {
         membershipData.moduleLevels = body.moduleLevels;
       }
+      if (body.assignedCongregation) {
+        membershipData.assignedCongregation = body.assignedCongregation;
+      }
 
       const { error: me } = await admin.from("platform_memberships").insert({
         user_id: created.user.id,
@@ -375,6 +388,12 @@ Deno.serve(async (req) => {
 
       if (body.moduleLevels === null) delete nextData.moduleLevels;
       else if (body.moduleLevels !== undefined) nextData.moduleLevels = body.moduleLevels;
+
+      if (body.assignedCongregation === null || body.assignedCongregation === "") {
+        delete nextData.assignedCongregation;
+      } else if (body.assignedCongregation !== undefined) {
+        nextData.assignedCongregation = body.assignedCongregation;
+      }
 
       const grantEbdAdmin = Boolean(
         contract.ministry_id &&

@@ -17,6 +17,8 @@ export interface ThermalReceiptEntry {
   referenceMonth?: string;
   type: "entrada" | "saida";
   purpose: string;
+  department?: string;
+  documentType?: string;
   bankAccount: string;
   paymentMethod: string;
   contributorName: string;
@@ -146,7 +148,17 @@ function buildStandaloneReceiptHtml(
       : ""
   }
   <div class="row"><span>Condição:</span><span>${escapeHtml(entry.contributorRole)}</span></div>
-  <div class="row"><span>Finalidade:</span><span>${escapeHtml(entry.purpose)}</span></div>
+  <div class="row"><span>Plano/Fin.:</span><span>${escapeHtml(entry.purpose)}</span></div>
+  ${
+    entry.department
+      ? `<div class="row"><span>Departamento:</span><span>${escapeHtml(entry.department)}</span></div>`
+      : ""
+  }
+  ${
+    entry.documentType
+      ? `<div class="row"><span>Documento:</span><span>${escapeHtml(entry.documentType)}</span></div>`
+      : ""
+  }
   ${
     entry.referenceMonth
       ? `<div class="row"><span>Referência:</span><span class="bold">${escapeHtml(refLabel)}</span></div>`
@@ -195,6 +207,8 @@ function buildPlainTextReceipt(
     ...(entry.contributorMatricula ? [`Matricula: #${entry.contributorMatricula}`] : []),
     `Condicao:   ${entry.contributorRole}`,
     `Finalidade: ${entry.purpose}`,
+    ...(entry.department ? [`Depto.:     ${entry.department}`] : []),
+    ...(entry.documentType ? [`Documento:  ${entry.documentType}`] : []),
     ...(entry.referenceMonth ? [`Referencia: ${formatReferenceMonthLabel(entry.referenceMonth)}`] : []),
     `Data Lanc.: ${formatDateBr(entry.date)}`,
     `Conta:      ${entry.bankAccount}`,
@@ -329,9 +343,21 @@ export function ThermalReceiptDialog({
               <span className="text-right">{entry.contributorRole}</span>
             </div>
             <div className="flex justify-between gap-2">
-              <span>Finalidade:</span>
+              <span>Plano/Fin.:</span>
               <span className="text-right">{entry.purpose}</span>
             </div>
+            {entry.department && (
+              <div className="flex justify-between gap-2">
+                <span>Departamento:</span>
+                <span className="text-right">{entry.department}</span>
+              </div>
+            )}
+            {entry.documentType && (
+              <div className="flex justify-between gap-2">
+                <span>Documento:</span>
+                <span className="text-right">{entry.documentType}</span>
+              </div>
+            )}
             {entry.referenceMonth && (
               <div className="flex justify-between gap-2">
                 <span>Referência:</span>

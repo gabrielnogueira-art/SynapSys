@@ -16,6 +16,7 @@ export type ViewerSession =
       accessLevel?: UserAccessLevel;
       allowedModules?: ModuleId[];
       moduleLevels?: Partial<Record<ModuleId, string>>;
+      assignedCongregation?: string;
     };
 
 export function getViewerSession(): ViewerSession {
@@ -56,6 +57,7 @@ export function switchToClientSimulation(user: PlatformUser) {
     accessLevel: user.accessLevel,
     allowedModules: user.allowedModules,
     moduleLevels: user.moduleLevels,
+    assignedCongregation: user.assignedCongregation,
   });
 }
 

@@ -1,5 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useContractModuleData } from "@/platform/useContractModuleData";
+import { useContractAccess } from "@/platform/useContractAccess";
+import { useViewerSession } from "@/platform/session";
+import {
+  computeSecretariatDashboardMetrics,
+  resolveEffectiveCongregation,
+} from "@/systems/church/churchMetrics";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +31,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BookOpenCheck,
+  Briefcase,
   Building2,
+  Cake,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -36,6 +44,7 @@ import {
   Plus,
   Printer,
   Search,
+  Smartphone,
   Trash2,
   Users,
 } from "lucide-react";
@@ -52,6 +61,8 @@ export interface ChurchMember {
   congregation: string;
   status: string;
   phone: string;
+  gender?: "M" | "F";
+  profession?: string;
   email?: string;
   birthDate?: string;
   cpf?: string;
@@ -91,9 +102,16 @@ export interface SecretariatCatalogs {
   statuses: string[];
   maritalStatuses: string[];
   congregations: string[];
+  professions: string[];
   unitHierarchies: string[];
   unitStatuses: string[];
   documentTypes: string[];
+}
+
+export interface SecretariatAppMetrics {
+  androidDownloads: number;
+  iosDownloads: number;
+  updatedAt?: string;
 }
 
 export interface SecretariatStoreData {
@@ -101,6 +119,7 @@ export interface SecretariatStoreData {
   members: ChurchMember[];
   events: PastoralEvent[];
   catalogs: SecretariatCatalogs;
+  appMetrics?: SecretariatAppMetrics;
 }
 
 const DEFAULT_CATALOGS: SecretariatCatalogs = {
@@ -124,6 +143,20 @@ const DEFAULT_CATALOGS: SecretariatCatalogs = {
   ],
   maritalStatuses: ["Solteiro(a)", "Casado(a)", "Viúvo(a)", "Divorciado(a)"],
   congregations: ["Igreja Sede"],
+  professions: [
+    "Estudante",
+    "Do Lar",
+    "Autônomo(a)",
+    "Comerciante",
+    "Professor(a)",
+    "Empresário(a)",
+    "Servidor(a) Público(a)",
+    "Profissional de Saúde",
+    "Motorista",
+    "Construção Civil",
+    "Aposentado(a)",
+    "Outros",
+  ],
   unitHierarchies: ["Igreja Sede", "Regional", "Congregação", "Ponto de Pregação"],
   unitStatuses: ["Ativa", "Em implantação", "Inativa"],
   documentTypes: [
@@ -140,6 +173,7 @@ const DEFAULT_SECRETARIAT_DATA: SecretariatStoreData = {
   members: [],
   events: [],
   catalogs: DEFAULT_CATALOGS,
+  appMetrics: { androidDownloads: 0, iosDownloads: 0 },
 };
 
 const DEFAULT_UNITS: ChurchUnit[] = [];
@@ -158,6 +192,7 @@ function normalizeSecretariatData(raw: unknown): SecretariatStoreData {
       members,
       events: [],
       catalogs: DEFAULT_CATALOGS,
+      appMetrics: { androidDownloads: 0, iosDownloads: 0 },
     };
   }
   if (raw && typeof raw === "object") {
@@ -172,6 +207,11 @@ function normalizeSecretariatData(raw: unknown): SecretariatStoreData {
       nextMatricula,
       members,
       events: Array.isArray(obj.events) ? obj.events : [],
+      appMetrics: {
+        androidDownloads: Math.max(0, Number(obj.appMetrics?.androidDownloads) || 0),
+        iosDownloads: Math.max(0, Number(obj.appMetrics?.iosDownloads) || 0),
+        updatedAt: obj.appMetrics?.updatedAt,
+      },
       catalogs: {
         roles: obj.catalogs?.roles?.length ? obj.catalogs.roles : DEFAULT_CATALOGS.roles,
         statuses: obj.catalogs?.statuses?.length ? obj.catalogs.statuses : DEFAULT_CATALOGS.statuses,
@@ -181,6 +221,9 @@ function normalizeSecretariatData(raw: unknown): SecretariatStoreData {
         congregations: obj.catalogs?.congregations?.length
           ? obj.catalogs.congregations
           : DEFAULT_CATALOGS.congregations,
+        professions: obj.catalogs?.professions?.length
+          ? obj.catalogs.professions
+          : DEFAULT_CATALOGS.professions,
         unitHierarchies: obj.catalogs?.unitHierarchies?.length
           ? obj.catalogs.unitHierarchies
           : DEFAULT_CATALOGS.unitHierarchies,
@@ -210,6 +253,8 @@ export const ChurchSecretariatPreview = ({
   moduleLevel?: string;
 }) => {
   const { toast } = useToast();
+  const access = useContractAccess(contractId);
+  const session = useViewerSession();
   const {
     value: rawSecretariat,
     update: setRawSecretariat,
@@ -243,12 +288,24 @@ export const ChurchSecretariatPreview = ({
     return [...merged];
   }, [catalogs.congregations, units]);
 
+  const effectiveCongregationInfo = useMemo(
+    () =>
+      resolveEffectiveCongregation({
+        sessionCongregation: session.mode === "client" ? session.assignedCongregation : null,
+        accessCongregation: access.assignedCongregation,
+        configuredDefault: congregationOptions[0] ?? "Igreja Sede",
+      }),
+    [session, access.assignedCongregation, congregationOptions]
+  );
+
   // Member creation form
   const [manualMatricula, setManualMatricula] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [birthDate, setBirthDate] = useState("");
+  const [gender, setGender] = useState<"" | "M" | "F">("");
+  const [profession, setProfession] = useState("");
   const [cpf, setCpf] = useState("");
   const [address, setAddress] = useState("");
   const [neighborhood, setNeighborhood] = useState("");
@@ -261,10 +318,22 @@ export const ChurchSecretariatPreview = ({
   const [memberSince, setMemberSince] = useState("");
   const [role, setRole] = useState(catalogs.roles[0] ?? "Membro");
   const [congregation, setCongregation] = useState(
-    congregationOptions[0] ?? "Igreja Sede"
+    effectiveCongregationInfo.congregation
   );
+  const congTouchedRef = useRef(false);
+  useEffect(() => {
+    if (!congTouchedRef.current) {
+      setCongregation(effectiveCongregationInfo.congregation);
+    }
+  }, [effectiveCongregationInfo.congregation]);
   const [status, setStatus] = useState(catalogs.statuses[0] ?? "Ativo");
   const [notes, setNotes] = useState("");
+
+  // Dashboard interactive state
+  const [birthdayTab, setBirthdayTab] = useState<"hoje" | "semana" | "mes">("hoje");
+  const [appDialogOpen, setAppDialogOpen] = useState(false);
+  const [appAndroidDraft, setAppAndroidDraft] = useState("0");
+  const [appIosDraft, setAppIosDraft] = useState("0");
 
   // Search, filters, pagination
   const [search, setSearch] = useState("");
@@ -353,14 +422,12 @@ export const ChurchSecretariatPreview = ({
     [members]
   );
 
-  const activeCount = useMemo(
-    () => members.filter((m) => m.status === "Ativo").length,
-    [members]
+  const dashboardMetrics = useMemo(
+    () => computeSecretariatDashboardMetrics(members, units),
+    [members, units]
   );
-  const inactiveOrOtherCount = useMemo(
-    () => members.filter((m) => m.status !== "Ativo").length,
-    [members]
-  );
+
+  const activeCount = dashboardMetrics.activeCount;
   const lastIssuedMatricula = useMemo(
     () =>
       Math.max(
@@ -370,6 +437,22 @@ export const ChurchSecretariatPreview = ({
       ),
     [data.nextMatricula, members]
   );
+
+  const handleSaveAppMetrics = (e: React.FormEvent) => {
+    e.preventDefault();
+    const androidDownloads = Math.max(0, parseInt(appAndroidDraft || "0", 10) || 0);
+    const iosDownloads = Math.max(0, parseInt(appIosDraft || "0", 10) || 0);
+    updateSecretariat((prev) => ({
+      ...prev,
+      appMetrics: {
+        androidDownloads,
+        iosDownloads,
+        updatedAt: new Date().toISOString().slice(0, 10),
+      },
+    }));
+    setAppDialogOpen(false);
+    toast({ title: "Métricas do App atualizadas!" });
+  };
 
   const handleAddMember = (e: React.FormEvent) => {
     e.preventDefault();
@@ -405,6 +488,8 @@ export const ChurchSecretariatPreview = ({
       phone: phone.trim() || "-",
       email: email.trim() || undefined,
       birthDate: birthDate || undefined,
+      gender: gender || undefined,
+      profession: profession.trim() || undefined,
       cpf: cpf.trim() || undefined,
       address: address.trim() || undefined,
       neighborhood: neighborhood.trim() || undefined,
@@ -416,7 +501,7 @@ export const ChurchSecretariatPreview = ({
       baptismDate: baptismDate || undefined,
       memberSince: memberSince || undefined,
       role: role || "Membro",
-      congregation: congregation || "Igreja Sede",
+      congregation: congregation || effectiveCongregationInfo.congregation || "Igreja Sede",
       status: status || "Ativo",
       notes: notes.trim() || undefined,
       createdAt: nowIso,
@@ -434,6 +519,8 @@ export const ChurchSecretariatPreview = ({
     setPhone("");
     setEmail("");
     setBirthDate("");
+    setGender("");
+    setProfession("");
     setCpf("");
     setAddress("");
     setNeighborhood("");
@@ -628,94 +715,400 @@ export const ChurchSecretariatPreview = ({
         </div>
 
         <TabsContent value="dashboard" className="space-y-5">
+          {/* 4 KPI Cards espelhados no Membros Web */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
+            <Card className="border-emerald-500/30 bg-emerald-500/5">
               <CardHeader className="pb-2">
-                <CardDescription>Sequência de Matrículas</CardDescription>
-                <CardTitle className="text-2xl flex items-center gap-2">
-                  <Hash className="h-5 w-5 text-primary" /> #{lastIssuedMatricula}
+                <div className="flex items-center justify-between gap-2">
+                  <CardDescription className="font-medium text-foreground/80">
+                    Aniversariantes do Dia
+                  </CardDescription>
+                  <div className="h-8 w-8 rounded-lg bg-emerald-500/20 text-emerald-700 flex items-center justify-center">
+                    <Cake className="h-4 w-4" />
+                  </div>
+                </div>
+                <CardTitle className="text-3xl font-bold text-emerald-700">
+                  {dashboardMetrics.birthdaysToday.length}
                 </CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  Próxima: #{data.nextMatricula} (nunca é resetada)
+                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                  <span>
+                    Da semana:{" "}
+                    <strong className="text-foreground">
+                      {dashboardMetrics.birthdaysWeek.length}
+                    </strong>
+                  </span>
+                  <span>
+                    Do mês:{" "}
+                    <strong className="text-foreground">
+                      {dashboardMetrics.birthdaysMonth.length}
+                    </strong>
+                  </span>
+                </div>
+              </CardHeader>
+            </Card>
+
+            <Card className="border-blue-500/30 bg-blue-500/5">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between gap-2">
+                  <CardDescription className="font-medium text-foreground/80">
+                    Igrejas / Unidades
+                  </CardDescription>
+                  <div className="h-8 w-8 rounded-lg bg-blue-500/20 text-blue-700 flex items-center justify-center">
+                    <Building2 className="h-4 w-4" />
+                  </div>
+                </div>
+                <CardTitle className="text-3xl font-bold text-blue-700">
+                  {dashboardMetrics.unitsCount}
+                </CardTitle>
+                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                  <span>Ativas: {dashboardMetrics.activeUnitsCount}</span>
+                  <span>Catálogo: {congregationOptions.length}</span>
+                </div>
+              </CardHeader>
+            </Card>
+
+            <Card className="border-amber-500/30 bg-amber-500/5">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between gap-2">
+                  <CardDescription className="font-medium text-foreground/80">
+                    Membros Ativos
+                  </CardDescription>
+                  <div className="h-8 w-8 rounded-lg bg-amber-500/20 text-amber-700 flex items-center justify-center">
+                    <Users className="h-4 w-4" />
+                  </div>
+                </div>
+                <CardTitle className="text-3xl font-bold text-amber-700">
+                  {activeCount.toLocaleString("pt-BR")}
+                </CardTitle>
+                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                  <span>
+                    Homens:{" "}
+                    <strong className="text-foreground">{dashboardMetrics.maleCount}</strong>{" "}
+                    ({dashboardMetrics.malePct}%)
+                  </span>
+                  <span>
+                    Mulheres:{" "}
+                    <strong className="text-foreground">{dashboardMetrics.femaleCount}</strong>{" "}
+                    ({dashboardMetrics.femalePct}%)
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Matrículas até #{lastIssuedMatricula} (Total rol: {members.length})
                 </p>
               </CardHeader>
             </Card>
-            <Card>
+
+            <Card className="border-rose-500/30 bg-rose-500/5">
               <CardHeader className="pb-2">
-                <CardDescription>Membros Ativos</CardDescription>
-                <CardTitle className="text-2xl text-emerald-600 flex items-center gap-2">
-                  <Users className="h-5 w-5" /> {activeCount}
+                <div className="flex items-center justify-between gap-2">
+                  <CardDescription className="font-medium text-foreground/80">
+                    Igreja App / Portal
+                  </CardDescription>
+                  <div className="h-8 w-8 rounded-lg bg-rose-500/20 text-rose-700 flex items-center justify-center">
+                    <Smartphone className="h-4 w-4" />
+                  </div>
+                </div>
+                <CardTitle className="text-3xl font-bold text-rose-700">
+                  {(
+                    (data.appMetrics?.androidDownloads ?? 0) +
+                    (data.appMetrics?.iosDownloads ?? 0)
+                  ).toLocaleString("pt-BR")}
                 </CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  De {members.length} cadastrado(s) no sistema
-                </p>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Inativos / Cartas / Falecidos</CardDescription>
-                <CardTitle className="text-2xl text-amber-600">
-                  {inactiveOrOtherCount}
-                </CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  Mantêm matrícula histórica preservada
-                </p>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Igrejas / Congregações</CardDescription>
-                <CardTitle className="text-2xl text-blue-600">{units.length}</CardTitle>
+                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+                  <span>
+                    Android:{" "}
+                    <strong className="text-foreground">
+                      {data.appMetrics?.androidDownloads ?? 0}
+                    </strong>
+                  </span>
+                  <span>
+                    iOS:{" "}
+                    <strong className="text-foreground">
+                      {data.appMetrics?.iosDownloads ?? 0}
+                    </strong>
+                  </span>
+                  {!isReadOnly && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-5 px-1.5 text-[10px]"
+                      onClick={() => {
+                        setAppAndroidDraft(String(data.appMetrics?.androidDownloads ?? 0));
+                        setAppIosDraft(String(data.appMetrics?.iosDownloads ?? 0));
+                        setAppDialogOpen(true);
+                      }}
+                    >
+                      Editar
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
             </Card>
           </div>
 
+          {/* Resumo por Faixa Etária */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Últimos Cadastros no Rol</CardTitle>
-              <CardDescription>
-                Use a aba Pessoas para cadastro completo, busca por matrícula e filtros.
-              </CardDescription>
+            <CardHeader className="pb-3 flex flex-wrap flex-row items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-base">Resumo por Faixa Etária</CardTitle>
+                <CardDescription>
+                  Distribuição demográfica dos membros ativos por faixa etária e gênero.
+                </CardDescription>
+              </div>
+              {dashboardMetrics.missingBirthDateCount > 0 && (
+                <Badge variant="outline" className="text-[11px]">
+                  {dashboardMetrics.missingBirthDateCount} ativo(s) sem data de nascimento
+                </Badge>
+              )}
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Matrícula</TableHead>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Cargo</TableHead>
-                    <TableHead>Congregação</TableHead>
-                    <TableHead>Situação</TableHead>
+                    <TableHead>Faixa Etária</TableHead>
+                    <TableHead className="text-right">Qtd. Masculino</TableHead>
+                    <TableHead className="text-right">% Masculino</TableHead>
+                    <TableHead className="text-right">Qtd. Feminino</TableHead>
+                    <TableHead className="text-right">% Feminino</TableHead>
+                    <TableHead className="text-right">Total Faixa</TableHead>
+                    <TableHead className="text-right">% Membros</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {members.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
-                        Nenhum membro cadastrado ainda.
+                  {dashboardMetrics.ageBrackets.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="font-medium text-xs sm:text-sm">
+                        {row.label}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs">
+                        {row.maleCount}
+                      </TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground">
+                        {row.malePct}%
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs">
+                        {row.femaleCount}
+                      </TableCell>
+                      <TableCell className="text-right text-xs text-muted-foreground">
+                        {row.femalePct}%
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-xs sm:text-sm">
+                        {row.total}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs">
+                        {row.pctOfActive.toFixed(2)}%
                       </TableCell>
                     </TableRow>
-                  ) : (
-                    members.slice(0, 6).map((m) => (
-                      <TableRow key={m.id}>
-                        <TableCell className="font-mono text-xs font-semibold">
-                          #{m.matricula ?? "-"}
-                        </TableCell>
-                        <TableCell className="font-medium">{m.name}</TableCell>
-                        <TableCell>{m.role}</TableCell>
-                        <TableCell className="text-muted-foreground">{m.congregation}</TableCell>
-                        <TableCell>
-                          <Badge variant={m.status === "Ativo" ? "default" : "secondary"}>
-                            {m.status}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
+
+          {/* Painel Interativo de Aniversariantes */}
+          <Card>
+            <CardHeader className="pb-3 flex flex-wrap flex-row items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Cake className="h-4 w-4 text-emerald-600" /> Aniversariantes do Período
+                </CardTitle>
+                <CardDescription>
+                  Acompanhe os aniversariantes do dia, da semana e do mês para felicitações pastorais.
+                </CardDescription>
+              </div>
+              <div className="flex gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={birthdayTab === "hoje" ? "default" : "outline"}
+                  onClick={() => setBirthdayTab("hoje")}
+                >
+                  Hoje ({dashboardMetrics.birthdaysToday.length})
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={birthdayTab === "semana" ? "default" : "outline"}
+                  onClick={() => setBirthdayTab("semana")}
+                >
+                  Semana ({dashboardMetrics.birthdaysWeek.length})
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={birthdayTab === "mes" ? "default" : "outline"}
+                  onClick={() => setBirthdayTab("mes")}
+                >
+                  Mês ({dashboardMetrics.birthdaysMonth.length})
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const list =
+                  birthdayTab === "hoje"
+                    ? dashboardMetrics.birthdaysToday
+                    : birthdayTab === "semana"
+                    ? dashboardMetrics.birthdaysWeek
+                    : dashboardMetrics.birthdaysMonth;
+                if (list.length === 0) {
+                  return (
+                    <p className="text-xs text-muted-foreground py-4 text-center">
+                      Nenhum aniversariante encontrado para este período.
+                    </p>
+                  );
+                }
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {list.slice(0, 12).map((b) => (
+                      <div
+                        key={b.member.id}
+                        className="rounded-lg border p-2.5 flex items-center justify-between gap-2 text-xs bg-muted/20"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-semibold truncate">
+                            {b.member.name}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            #{b.member.matricula ?? "-"} • {b.member.congregation}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <Badge variant={b.daysUntil === 0 ? "default" : "outline"} className="text-[10px]">
+                            {String(b.day).padStart(2, "0")}/{String(b.month).padStart(2, "0")}
+                            {b.ageTurning !== null ? ` • ${b.ageTurning} anos` : ""}
+                          </Badge>
+                          <div className="text-[10px] text-muted-foreground mt-0.5">
+                            {b.member.phone}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+
+          {/* Painel inferior em 3 colunas: Últimos Cadastros, Cargos Eclesiásticos, Top 10 Profissões */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Últimos Cadastros</CardTitle>
+                <CardDescription>Registros mais recentes no rol</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2.5">
+                {dashboardMetrics.latestRegistrations.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-6 text-center">
+                    Nenhum membro cadastrado ainda.
+                  </p>
+                ) : (
+                  dashboardMetrics.latestRegistrations.map((m) => (
+                    <div
+                      key={m.id}
+                      className="rounded-lg border p-2.5 flex items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0">
+                          {m.name.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-semibold truncate">{m.name}</div>
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            Matrícula: #{m.matricula ?? "-"} • {m.congregation}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 text-[10px] text-muted-foreground">
+                        {m.createdAt
+                          ? m.createdAt.slice(0, 10).split("-").reverse().join("/")
+                          : "-"}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Cargos Eclesiásticos</CardTitle>
+                <CardDescription>Representatividade nos membros ativos</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {dashboardMetrics.roleDistribution.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-6 text-center">
+                    Cadastre membros para visualizar os cargos.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Cargo</TableHead>
+                        <TableHead className="text-right">Qtde</TableHead>
+                        <TableHead className="text-right">% Cargo</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dashboardMetrics.roleDistribution.slice(0, 10).map((row) => (
+                        <TableRow key={row.label}>
+                          <TableCell className="text-xs font-medium">{row.label}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">
+                            {row.count}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                            {row.pct.toFixed(2)}%
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-1.5">
+                  <Briefcase className="h-4 w-4 text-primary" /> Top 10 Profissões
+                </CardTitle>
+                <CardDescription>
+                  Profissões declaradas ({dashboardMetrics.unspecifiedProfessionCount} não informada)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {dashboardMetrics.topProfessions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-6 text-center">
+                    Preencha a profissão na aba Pessoas para gerar o ranking.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Profissão</TableHead>
+                        <TableHead className="text-right">Qtde</TableHead>
+                        <TableHead className="text-right">% Profissão</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dashboardMetrics.topProfessions.map((row) => (
+                        <TableRow key={row.label}>
+                          <TableCell className="text-xs font-medium">{row.label}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">
+                            {row.count}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs text-muted-foreground">
+                            {row.pct.toFixed(2)}%
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="pessoas" className="space-y-5">
@@ -786,7 +1179,39 @@ export const ChurchSecretariatPreview = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+                    <div className="space-y-1">
+                      <Label>Sexo</Label>
+                      <Select
+                        value={gender || "__none__"}
+                        onValueChange={(v) =>
+                          setGender(v === "M" || v === "F" ? v : "")
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Não informado</SelectItem>
+                          <SelectItem value="M">Masculino</SelectItem>
+                          <SelectItem value="F">Feminino</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <Label>Profissão</Label>
+                      <EditableSelect
+                        label="Profissão"
+                        value={profession}
+                        onChange={setProfession}
+                        options={catalogs.professions}
+                        onChangeOptions={(opts) => updateCatalog("professions", opts)}
+                        canManageOptions={canManageCatalogs}
+                        allowEmpty
+                        emptyLabel="Não informada"
+                        placeholder="Ex: Estudante, Do Lar..."
+                      />
+                    </div>
                     <div className="space-y-1">
                       <Label>Cargo / Função</Label>
                       <EditableSelect
@@ -803,7 +1228,10 @@ export const ChurchSecretariatPreview = ({
                       <EditableSelect
                         label="Congregação"
                         value={congregation}
-                        onChange={setCongregation}
+                        onChange={(v) => {
+                          congTouchedRef.current = true;
+                          setCongregation(v);
+                        }}
                         options={congregationOptions}
                         onChangeOptions={(opts) => updateCatalog("congregations", opts)}
                         canManageOptions={canManageCatalogs}
@@ -820,6 +1248,9 @@ export const ChurchSecretariatPreview = ({
                         canManageOptions={canManageCatalogs}
                       />
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <Label>Estado Civil</Label>
                       <EditableSelect
@@ -1506,6 +1937,42 @@ export const ChurchSecretariatPreview = ({
                     canManageOptions={canManageCatalogs}
                   />
                 </div>
+                <div className="space-y-1">
+                  <Label>Sexo</Label>
+                  <Select
+                    value={editingMember.gender || "__none__"}
+                    onValueChange={(v) =>
+                      setEditingMember({
+                        ...editingMember,
+                        gender: v === "M" || v === "F" ? v : undefined,
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecionar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Não informado</SelectItem>
+                      <SelectItem value="M">Masculino</SelectItem>
+                      <SelectItem value="F">Feminino</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Profissão</Label>
+                  <EditableSelect
+                    label="Profissão"
+                    value={editingMember.profession ?? ""}
+                    onChange={(v) =>
+                      setEditingMember({ ...editingMember, profession: v })
+                    }
+                    options={catalogs.professions}
+                    onChangeOptions={(opts) => updateCatalog("professions", opts)}
+                    canManageOptions={canManageCatalogs}
+                    allowEmpty
+                    emptyLabel="Não informada"
+                  />
+                </div>
               </div>
 
               {(editingMember.maritalStatus ?? "").toLowerCase().includes("casad") && (
@@ -1669,6 +2136,52 @@ export const ChurchSecretariatPreview = ({
                 Cancelar
               </Button>
               <Button type="submit">Atualizar sequência</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Métricas do Igreja App (Android / iOS) */}
+      <Dialog open={appDialogOpen} onOpenChange={setAppDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Métricas do App da Igreja</DialogTitle>
+            <DialogDescription>
+              Informe os downloads / instalações atuais na Play Store (Android) e App Store (iOS) para acompanhar no painel.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveAppMetrics} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="app-android-input">Android (Play Store)</Label>
+                <Input
+                  id="app-android-input"
+                  type="number"
+                  min={0}
+                  value={appAndroidDraft}
+                  onChange={(e) => setAppAndroidDraft(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="app-ios-input">iOS (App Store)</Label>
+                <Input
+                  id="app-ios-input"
+                  type="number"
+                  min={0}
+                  value={appIosDraft}
+                  onChange={(e) => setAppIosDraft(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAppDialogOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit">Salvar métricas</Button>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -269,6 +269,13 @@ export const ChurchWorkspace = ({ contract, overrides, initialArea }: ChurchWork
           active: treasurySection === "conferencia",
           onClick: () => setTreasurySection("conferencia"),
         },
+        {
+          id: "tr-rel",
+          label: "Relatórios & Fechamento",
+          icon: <FileText className="h-4 w-4" />,
+          active: treasurySection === "relatorios",
+          onClick: () => setTreasurySection("relatorios"),
+        },
         ...(treasuryLevel === "admin"
           ? [
               {

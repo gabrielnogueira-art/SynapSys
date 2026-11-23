@@ -173,6 +173,7 @@ export interface PlatformContract {
   createdAt: string;
   memberModuleOverrides?: Record<string, ModuleId[]>;
   memberModuleLevelOverrides?: Record<string, Partial<Record<ModuleId, string>>>;
+  memberCongregationOverrides?: Record<string, string>;
   branding?: {
     logoUrl?: string | null;
     primaryHsl?: string | null;
@@ -197,6 +198,7 @@ export interface PlatformUser {
   status: "ativo" | "pendente" | "bloqueado";
   allowedModules?: ModuleId[];
   moduleLevels?: Partial<Record<ModuleId, string>>;
+  assignedCongregation?: string;
   ebdAdmin?: boolean;
   notes?: string;
   createdAt: string;

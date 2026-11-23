@@ -3,26 +3,49 @@ import { useContractModuleData } from "@/platform/useContractModuleData";
 import { supabase } from "@/integrations/supabase/client";
 import { useContractAccess } from "@/platform/useContractAccess";
 import { useViewerSession } from "@/platform/session";
+import {
+  buildTreasuryClosingReportHtml,
+  buildTreasuryCsv,
+  computeTreasuryReports,
+  findMemberByMatriculaInput,
+  resolveEffectiveCongregation,
+  suggestAccountPlanForRole,
+} from "@/systems/church/churchMetrics";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowDownCircle,
   ArrowUpCircle,
+  ClipboardList,
+  Download,
+  FileSpreadsheet,
   Landmark,
+  Loader2,
+  Paperclip,
   Plus,
   Printer,
+  RotateCcw,
   Search,
   Settings2,
   Trash2,
   UserCheck,
   Wallet,
+  X,
 } from "lucide-react";
 import { EditableSelect } from "@/components/EditableSelect";
 import {
@@ -39,6 +62,7 @@ export type TreasurySection =
   | "entradas"
   | "saidas"
   | "conferencia"
+  | "relatorios"
   | "predefinicoes";
 
 export interface TreasuryEntry {
@@ -48,12 +72,16 @@ export interface TreasuryEntry {
   referenceMonth?: string;
   type: "entrada" | "saida";
   category: string;
+  department?: string;
+  documentType?: string;
   bankAccount?: string;
   paymentMethod?: string;
   contributorName?: string;
   contributorMemberId?: string;
   contributorMatricula?: number;
   contributorRole?: string;
+  pixE2E?: string;
+  attachmentName?: string;
   description: string;
   notes?: string;
   congregation: string;
@@ -65,6 +93,8 @@ export interface TreasuryEntry {
 
 export interface TreasuryCatalogs {
   bankAccounts: string[];
+  departments: string[];
+  documentTypes: string[];
   entryPurposes: string[];
   expenseCategories: string[];
   contributorRoles: string[];
@@ -74,6 +104,8 @@ export interface TreasuryCatalogs {
 
 export interface TreasuryDefaults {
   defaultBankAccount: string;
+  defaultDepartment: string;
+  defaultDocumentType: string;
   defaultPurpose: string;
   defaultExpenseCategory: string;
   defaultContributorRole: string;
@@ -107,14 +139,30 @@ const DEFAULT_CATALOGS: TreasuryCatalogs = {
     "Caixa Econômica Federal",
     "Conta PIX Igreja",
   ],
+  departments: [
+    "1 - Tesouraria",
+    "EBD",
+    "Mocidade / Jovens",
+    "Missões",
+    "Ação Social",
+    "Obras / Construção",
+  ],
+  documentTypes: [
+    "Recibo",
+    "Comprovante PIX",
+    "Dinheiro em Espécie",
+    "Transferência Bancária",
+    "Nota Fiscal",
+    "Carnê / Boleto",
+  ],
   entryPurposes: [
-    "Dízimo de Membros",
-    "Dízimo de Obreiros",
-    "Dízimo de Pastor",
-    "Oferta Geral",
-    "Oferta de Missões",
-    "Oferta de Construção",
-    "Voto / Primícias",
+    "01.010 - Dízimo de Membros",
+    "01.015 - Dízimo de Obreiros",
+    "01.020 - Dízimo de Pastor",
+    "02.001 - Oferta Geral",
+    "02.010 - Oferta de Missões",
+    "02.020 - Oferta de Construção",
+    "02.030 - Voto / Primícias",
   ],
   expenseCategories: [
     "Energia / Água / Internet",
@@ -151,6 +199,8 @@ function makeDefaultTreasuryData(clientName: string): TreasuryStoreData {
     catalogs: DEFAULT_CATALOGS,
     defaults: {
       defaultBankAccount: DEFAULT_CATALOGS.bankAccounts[0],
+      defaultDepartment: DEFAULT_CATALOGS.departments[0],
+      defaultDocumentType: DEFAULT_CATALOGS.documentTypes[0],
       defaultPurpose: DEFAULT_CATALOGS.entryPurposes[0],
       defaultExpenseCategory: DEFAULT_CATALOGS.expenseCategories[0],
       defaultContributorRole: DEFAULT_CATALOGS.contributorRoles[0],
@@ -187,6 +237,12 @@ function normalizeTreasuryData(raw: unknown, clientName: string): TreasuryStoreD
       bankAccounts: obj.catalogs?.bankAccounts?.length
         ? obj.catalogs.bankAccounts
         : DEFAULT_CATALOGS.bankAccounts,
+      departments: obj.catalogs?.departments?.length
+        ? obj.catalogs.departments
+        : DEFAULT_CATALOGS.departments,
+      documentTypes: obj.catalogs?.documentTypes?.length
+        ? obj.catalogs.documentTypes
+        : DEFAULT_CATALOGS.documentTypes,
       entryPurposes: obj.catalogs?.entryPurposes?.length
         ? obj.catalogs.entryPurposes
         : DEFAULT_CATALOGS.entryPurposes,
@@ -235,6 +291,8 @@ function toThermalEntry(entry: TreasuryEntry): ThermalReceiptEntry {
     referenceMonth: entry.referenceMonth,
     type: entry.type,
     purpose: entry.category,
+    department: entry.department,
+    documentType: entry.documentType,
     bankAccount: entry.bankAccount || "Caixa Geral (Dinheiro)",
     paymentMethod: entry.paymentMethod || "Dinheiro",
     contributorName: entry.contributorName || entry.description,
@@ -340,9 +398,26 @@ export const ChurchTreasuryPreview = ({
     };
   }, [contractId]);
 
+  const effectiveCongregationInfo = useMemo(
+    () =>
+      resolveEffectiveCongregation({
+        sessionCongregation:
+          session.mode === "client" ? session.assignedCongregation : null,
+        accessCongregation: access.assignedCongregation,
+        configuredDefault: defaults.defaultCongregation,
+      }),
+    [session, access.assignedCongregation, defaults.defaultCongregation]
+  );
+
   const congregationOptions = useMemo(() => {
-    return [...new Set([...catalogs.congregations, ...unitNames])];
-  }, [catalogs.congregations, unitNames]);
+    return [
+      ...new Set([
+        ...catalogs.congregations,
+        ...unitNames,
+        effectiveCongregationInfo.congregation,
+      ]),
+    ].filter(Boolean);
+  }, [catalogs.congregations, unitNames, effectiveCongregationInfo.congregation]);
 
   // Simplified Launch Form State
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -353,21 +428,38 @@ export const ChurchTreasuryPreview = ({
   const [referenceMonth, setReferenceMonth] = useState(todayStr.slice(0, 7));
   const [manualMonthEdited, setManualMonthEdited] = useState(false);
   const [purpose, setPurpose] = useState(defaults.defaultPurpose);
+  const [department, setDepartment] = useState(defaults.defaultDepartment);
+  const [documentType, setDocumentType] = useState(defaults.defaultDocumentType);
   const [bankAccount, setBankAccount] = useState(defaults.defaultBankAccount);
   const [paymentMethod, setPaymentMethod] = useState(defaults.defaultPaymentMethod);
   const [contributorRole, setContributorRole] = useState(defaults.defaultContributorRole);
-  const [congregation, setCongregation] = useState(defaults.defaultCongregation);
+  const [congregation, setCongregation] = useState(effectiveCongregationInfo.congregation);
+  const [matriculaInput, setMatriculaInput] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");
+  const [selectedMemberOriginCong, setSelectedMemberOriginCong] = useState("");
   const [contributorName, setContributorName] = useState("");
   const [contributorMatricula, setContributorMatricula] = useState<number | undefined>();
   const [notes, setNotes] = useState("");
   const [amount, setAmount] = useState("");
+  const [printMiniReceipt, setPrintMiniReceipt] = useState(defaults.autoOpenReceiptOnSave);
+  const [paperWidthOverride, setPaperWidthOverride] = useState<"58mm" | "80mm">(
+    defaults.receiptPaperWidth
+  );
+  const [attachedPix, setAttachedPix] = useState<{ fileName: string; e2e?: string } | null>(null);
+  const [extractingPix, setExtractingPix] = useState(false);
+
+  // Member search dialog
+  const [memberPickerOpen, setMemberPickerOpen] = useState(false);
+  const [memberPickerQuery, setMemberPickerQuery] = useState("");
+  const matriculaInputRef = useRef<HTMLInputElement | null>(null);
+  const amountInputRef = useRef<HTMLInputElement | null>(null);
+  const pixAttachmentRef = useRef<HTMLInputElement | null>(null);
 
   // Receipt modal
   const [receiptEntry, setReceiptEntry] = useState<ThermalReceiptEntry | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
 
-  // Filters for Conferência / Movimentações
+  // Filters for Conferência / Movimentações & Relatórios
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [filterOperator, setFilterOperator] = useState("all");
@@ -380,20 +472,24 @@ export const ChurchTreasuryPreview = ({
   // Defaults editor draft state
   const [defaultsDraft, setDefaultsDraft] = useState<TreasuryDefaults>(defaults);
   const lastDefaultsSigRef = useRef<string>("");
-  const defaultsSig = JSON.stringify(defaults);
+  const defaultsSig = `${JSON.stringify(defaults)}|${effectiveCongregationInfo.congregation}`;
 
   useEffect(() => {
     if (lastDefaultsSigRef.current === defaultsSig) return;
     lastDefaultsSigRef.current = defaultsSig;
     setDefaultsDraft(defaults);
     setBankAccount(defaults.defaultBankAccount);
+    setDepartment(defaults.defaultDepartment);
+    setDocumentType(defaults.defaultDocumentType);
     setPaymentMethod(defaults.defaultPaymentMethod);
     setContributorRole(defaults.defaultContributorRole);
-    setCongregation(defaults.defaultCongregation);
+    setCongregation(effectiveCongregationInfo.congregation);
+    setPrintMiniReceipt(defaults.autoOpenReceiptOnSave);
+    setPaperWidthOverride(defaults.receiptPaperWidth);
     setPurpose(
       type === "entrada" ? defaults.defaultPurpose : defaults.defaultExpenseCategory
     );
-  }, [defaultsSig, defaults, type]);
+  }, [defaultsSig, defaults, type, effectiveCongregationInfo.congregation]);
 
   useEffect(() => {
     if (activeSection === "entradas" || activeSection === "lancamento") {
@@ -441,18 +537,18 @@ export const ChurchTreasuryPreview = ({
     }
   };
 
-  const handleMemberSelect = (memberId: string) => {
-    if (memberId === "__manual__") {
-      setSelectedMemberId("");
-      setContributorMatricula(undefined);
-      return;
-    }
-    const found = memberDirectory.find((m) => m.id === memberId);
-    if (!found) return;
+  const applyFoundMember = (found: MemberLookup) => {
     setSelectedMemberId(found.id);
     setContributorName(found.name);
     setContributorMatricula(found.matricula);
-    if (found.congregation) setCongregation(found.congregation);
+    setMatriculaInput(found.matricula ? String(found.matricula) : "");
+    setSelectedMemberOriginCong(found.congregation || "");
+    if (
+      effectiveCongregationInfo.source !== "usuario" &&
+      found.congregation
+    ) {
+      setCongregation(found.congregation);
+    }
     if (
       found.role &&
       catalogs.contributorRoles.some(
@@ -460,6 +556,130 @@ export const ChurchTreasuryPreview = ({
       )
     ) {
       setContributorRole(found.role);
+    } else if (found.role) {
+      setContributorRole(found.role);
+    }
+    if (type === "entrada") {
+      const suggested = suggestAccountPlanForRole(
+        found.role,
+        purpose,
+        catalogs.entryPurposes
+      );
+      if (suggested) setPurpose(suggested);
+    }
+  };
+
+  const handleMemberSelect = (memberId: string) => {
+    if (memberId === "__manual__") {
+      setSelectedMemberId("");
+      setContributorMatricula(undefined);
+      setMatriculaInput("");
+      setSelectedMemberOriginCong("");
+      return;
+    }
+    const found = memberDirectory.find((m) => m.id === memberId);
+    if (!found) return;
+    applyFoundMember(found);
+  };
+
+  const handleMatriculaLookup = (moveFocusToAmount = false): boolean => {
+    const clean = matriculaInput.trim();
+    if (!clean) return false;
+    const found = findMemberByMatriculaInput(memberDirectory, clean);
+    if (!found) {
+      toast({
+        variant: "destructive",
+        title: `Matrícula #${clean.replace(/#/g, "")} não encontrada`,
+        description:
+          memberDirectory.length === 0
+            ? "Cadastre membros na Secretaria ou digite o nome manualmente."
+            : "Verifique o número ou use a lupa para pesquisar pelo nome.",
+      });
+      return false;
+    }
+    applyFoundMember(found);
+    if (moveFocusToAmount) {
+      setTimeout(() => amountInputRef.current?.focus(), 20);
+    }
+    return true;
+  };
+
+  const handleAttachPixReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const inputEl = e.currentTarget;
+    const file = inputEl.files?.[0];
+    if (!file) return;
+    setExtractingPix(true);
+    try {
+      const [{ extractReceiptTextFromFile }, { parsePixReceiptText }] = await Promise.all([
+        import("@/platform/labs/clientReceiptExtractor"),
+        import("@/platform/labs/pixReceiptParser"),
+      ]);
+      const extracted = await extractReceiptTextFromFile(file);
+      if (!extracted.text.trim()) {
+        setAttachedPix({ fileName: file.name });
+        toast({
+          title: `Anexo ${file.name} referenciado (Zero Storage)`,
+          description: "Não foi possível ler o valor automaticamente; preencha o valor ao lado.",
+        });
+        return;
+      }
+      const parsed = parsePixReceiptText(extracted.text, {
+        churchName: defaults.churchHeader.churchName || clientName,
+        churchCnpj: defaults.churchHeader.cnpj || "",
+        pixKey: "",
+        pixKeyType: "cnpj",
+        bankName: bankAccount,
+      });
+      if (parsed.amount !== null) setAmount(parsed.amount.toFixed(2));
+      if (parsed.paidAtIso && /^\d{4}-\d{2}-\d{2}/.test(parsed.paidAtIso)) {
+        handleDateChange(parsed.paidAtIso.slice(0, 10));
+      }
+      if (parsed.e2eCode) {
+        setNotes((prev) =>
+          prev.trim()
+            ? `${prev.trim()} • PIX ${parsed.e2eCode}`
+            : `Comprovante PIX ${parsed.e2eCode}`
+        );
+      }
+      if (!contributorName.trim() && parsed.payerName) {
+        setContributorName(parsed.payerName);
+      }
+      if (catalogs.paymentMethods.includes("PIX")) setPaymentMethod("PIX");
+      if (catalogs.documentTypes.includes("Comprovante PIX")) {
+        setDocumentType("Comprovante PIX");
+      }
+      setAttachedPix({ fileName: file.name, e2e: parsed.e2eCode ?? undefined });
+      toast({
+        title: `Comprovante PIX lido localmente (${file.name})`,
+        description:
+          parsed.amount !== null
+            ? `Valor R$ ${parsed.amount.toFixed(2)} identificado sem salvar arquivo no servidor.`
+            : "Nenhum arquivo pesado enviado ao banco (Zero Storage).",
+      });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Não foi possível ler este anexo automaticamente",
+      });
+    } finally {
+      setExtractingPix(false);
+      inputEl.value = "";
+    }
+  };
+
+  const resetPersonFieldsOnly = () => {
+    setMatriculaInput("");
+    setSelectedMemberId("");
+    setSelectedMemberOriginCong("");
+    setContributorName("");
+    setContributorMatricula(undefined);
+    setContributorRole(defaults.defaultContributorRole);
+    setNotes("");
+    setAmount("");
+    setAttachedPix(null);
+    setManualMonthEdited(false);
+    if (defaults.autoReferenceMonthFromDate && /^\d{4}-\d{2}/.test(entryDate)) {
+      setReferenceMonth(entryDate.slice(0, 7));
     }
   };
 
@@ -471,7 +691,8 @@ export const ChurchTreasuryPreview = ({
       toast({ variant: "destructive", title: "Informe um valor válido maior que zero." });
       return;
     }
-    const finalContributor = contributorName.trim() || (type === "entrada" ? "Oferta / Anônimo" : "Fornecedor");
+    const finalContributor =
+      contributorName.trim() || (type === "entrada" ? "Oferta / Anônimo" : "Fornecedor");
     const seqNum = data.nextReceiptSeq;
     const receiptNumber = `REC-${String(seqNum).padStart(4, "0")}`;
     const nowIso = new Date().toISOString();
@@ -483,15 +704,19 @@ export const ChurchTreasuryPreview = ({
       referenceMonth: type === "entrada" ? referenceMonth : referenceMonth || undefined,
       type,
       category: purpose,
+      department,
+      documentType,
       bankAccount,
       paymentMethod,
       contributorName: finalContributor,
       contributorMemberId: selectedMemberId || undefined,
       contributorMatricula,
       contributorRole,
+      pixE2E: attachedPix?.e2e,
+      attachmentName: attachedPix?.fileName,
       description: `${purpose} — ${finalContributor}`,
       notes: notes.trim() || undefined,
-      congregation: congregation || "Igreja Sede",
+      congregation: congregation || effectiveCongregationInfo.congregation || "Igreja Sede",
       amount: numeric,
       createdAtIso: nowIso,
       createdByName: currentOperator.name,
@@ -504,20 +729,18 @@ export const ChurchTreasuryPreview = ({
       entries: [nextEntry, ...prev.entries],
     }));
 
-    if (defaults.autoOpenReceiptOnSave) {
+    if (printMiniReceipt) {
       setReceiptEntry(toThermalEntry(nextEntry));
       setReceiptOpen(true);
+    } else {
+      toast({
+        title: `Lançamento ${receiptNumber} salvo (${brl(numeric)})`,
+        description: "Pronto para o próximo registro.",
+      });
     }
 
-    setContributorName("");
-    setSelectedMemberId("");
-    setContributorMatricula(undefined);
-    setNotes("");
-    setAmount("");
-    setManualMonthEdited(false);
-    if (defaults.autoReferenceMonthFromDate && /^\d{4}-\d{2}/.test(entryDate)) {
-      setReferenceMonth(entryDate.slice(0, 7));
-    }
+    resetPersonFieldsOnly();
+    setTimeout(() => matriculaInputRef.current?.focus(), 60);
   };
 
   const handleSaveDefaults = (e: React.FormEvent) => {
@@ -649,232 +872,474 @@ export const ChurchTreasuryPreview = ({
   const brl = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+  const reportSummary = useMemo(
+    () => computeTreasuryReports(filteredEntries),
+    [filteredEntries]
+  );
+
+  const memberPickerResults = useMemo(() => {
+    const q = memberPickerQuery.trim().toLowerCase();
+    if (!q) return memberDirectory.slice(0, 40);
+    return memberDirectory
+      .filter((m) => {
+        const matStr = m.matricula ? `#${m.matricula} ${m.matricula}` : "";
+        return (
+          matStr.includes(q) ||
+          m.name.toLowerCase().includes(q) ||
+          m.role.toLowerCase().includes(q) ||
+          m.congregation.toLowerCase().includes(q)
+        );
+      })
+      .slice(0, 40);
+  }, [memberDirectory, memberPickerQuery]);
+
+  const handlePrintClosingReport = () => {
+    const periodLabel =
+      filterStartDate || filterEndDate
+        ? `${filterStartDate || "..."} até ${filterEndDate || "..."}`
+        : filterRefMonth !== "all"
+        ? formatReferenceMonthLabel(filterRefMonth)
+        : "Todo o período filtrado";
+    const html = buildTreasuryClosingReportHtml({
+      churchName: defaults.churchHeader.churchName || clientName,
+      subtitle: defaults.churchHeader.subtitle,
+      cnpj: defaults.churchHeader.cnpj,
+      periodLabel,
+      congregationLabel:
+        effectiveCongregationInfo.source === "usuario"
+          ? effectiveCongregationInfo.congregation
+          : "Todas / Consolidado",
+      generatedBy: currentOperator.name,
+      summary: reportSummary,
+    });
+    const popup = window.open("", "_blank", "width=900,height=780");
+    if (popup) {
+      popup.document.open();
+      popup.document.write(html);
+      popup.document.close();
+      popup.focus();
+      setTimeout(() => popup.print(), 250);
+    } else {
+      window.print();
+    }
+  };
+
+  const handleExportCsv = () => {
+    const csv = buildTreasuryCsv(filteredEntries);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tesouraria-${todayStr}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast({ title: `Exportados ${filteredEntries.length} lançamento(s) em CSV!` });
+  };
+
+  const nextSeqLabel = `REC-${String(data.nextReceiptSeq).padStart(4, "0")}`;
+
   const renderQuickForm = () => (
-    <Card>
-      <CardHeader className="flex flex-wrap flex-row items-center justify-between gap-2">
+    <Card className="border-primary/25">
+      <CardHeader className="pb-3 flex flex-wrap flex-row items-center justify-between gap-2">
         <div>
-          <CardTitle className="text-base">
-            Lançamento Simplificado (Dízimos, Ofertas & Movimentações)
-          </CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle className="text-base">
+              Lançamento Simplificado
+            </CardTitle>
+            <Badge
+              variant={effectiveCongregationInfo.source === "usuario" ? "default" : "secondary"}
+              className="text-[11px]"
+            >
+              {effectiveCongregationInfo.source === "usuario"
+                ? `Unidade do login: ${effectiveCongregationInfo.congregation}`
+                : `Padrão: ${effectiveCongregationInfo.congregation}`}
+            </Badge>
+          </div>
           <CardDescription>
-            Preenchido com as predefinições configuradas (alteráveis a qualquer momento). Responsável:{" "}
+            Configurações cadastrais pré-preenchidas e busca instantânea por matrícula no balcão. Operador:{" "}
             <strong>{currentOperator.name}</strong> ({currentOperator.email}).
           </CardDescription>
         </div>
-        {isAdmin && (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => onChangeSection?.("predefinicoes")}
+        <div className="flex flex-wrap items-center gap-2">
+          <Select
+            value={type}
+            onValueChange={(v: "entrada" | "saida") => {
+              setType(v);
+              setPurpose(
+                v === "entrada"
+                  ? defaults.defaultPurpose
+                  : defaults.defaultExpenseCategory
+              );
+            }}
           >
-            <Settings2 className="h-3.5 w-3.5 mr-1.5" /> Predefinições
-          </Button>
-        )}
+            <SelectTrigger className="h-8 w-44 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="entrada">Entrada (Dízimo / Oferta)</SelectItem>
+              <SelectItem value="saida">Saída / Despesa</SelectItem>
+            </SelectContent>
+          </Select>
+          {isAdmin && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onChangeSection?.("predefinicoes")}
+            >
+              <Settings2 className="h-3.5 w-3.5 mr-1.5" /> Configurar
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleAdd} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-            <div className="space-y-1">
-              <Label>Tipo</Label>
-              <Select
-                value={type}
-                onValueChange={(v: "entrada" | "saida") => {
-                  setType(v);
-                  setPurpose(
-                    v === "entrada"
-                      ? defaults.defaultPurpose
-                      : defaults.defaultExpenseCategory
-                  );
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="entrada">Entrada (Dízimo / Oferta)</SelectItem>
-                  <SelectItem value="saida">Saída / Despesa</SelectItem>
-                </SelectContent>
-              </Select>
+          {/* Bloco 1: Configurações Cadastrais (Espelhado no Membros Web) */}
+          <div className="rounded-lg border bg-muted/25 p-3.5 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Configurações Cadastrais
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                Clique no ícone de engrenagem ao lado de cada caixa para adicionar/editar opções
+              </span>
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="tr-date">Data do Lançamento</Label>
-              <Input
-                id="tr-date"
-                type="date"
-                value={entryDate}
-                onChange={(e) => handleDateChange(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label htmlFor="tr-ref-month">Mês de Referência</Label>
-              <Input
-                id="tr-ref-month"
-                type="month"
-                value={referenceMonth}
-                onChange={(e) => {
-                  setManualMonthEdited(true);
-                  setReferenceMonth(e.target.value);
-                }}
-              />
-              <p className="text-[11px] text-muted-foreground">
-                {formatReferenceMonthLabel(referenceMonth)}
-              </p>
-            </div>
-
-            <div className="space-y-1 md:col-span-2">
-              <Label>Conta Bancária / Caixa</Label>
-              <EditableSelect
-                label="Conta Bancária"
-                value={bankAccount}
-                onChange={setBankAccount}
-                options={catalogs.bankAccounts}
-                onChangeOptions={(opts) => updateCatalog("bankAccounts", opts)}
-                canManageOptions={canManageCatalogs}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label>Forma de Pagamento</Label>
-              <EditableSelect
-                label="Forma de Pagamento"
-                value={paymentMethod}
-                onChange={setPaymentMethod}
-                options={catalogs.paymentMethods}
-                onChangeOptions={(opts) => updateCatalog("paymentMethods", opts)}
-                canManageOptions={canManageCatalogs}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-            <div className="space-y-1 md:col-span-2">
-              <Label>
-                {type === "entrada"
-                  ? "Finalidade / Tipo de Receita"
-                  : "Categoria de Despesa"}
-              </Label>
-              <EditableSelect
-                label={type === "entrada" ? "Finalidade" : "Categoria de Despesa"}
-                value={purpose}
-                onChange={setPurpose}
-                options={
-                  type === "entrada"
-                    ? catalogs.entryPurposes
-                    : catalogs.expenseCategories
-                }
-                onChangeOptions={(opts) =>
-                  updateCatalog(
-                    type === "entrada" ? "entryPurposes" : "expenseCategories",
-                    opts
-                  )
-                }
-                canManageOptions={canManageCatalogs}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label>Condição (Membro / Obreiro)</Label>
-              <EditableSelect
-                label="Condição do Contribuinte"
-                value={contributorRole}
-                onChange={setContributorRole}
-                options={catalogs.contributorRoles}
-                onChangeOptions={(opts) => updateCatalog("contributorRoles", opts)}
-                canManageOptions={canManageCatalogs}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label>Congregação</Label>
-              <EditableSelect
-                label="Congregação"
-                value={congregation}
-                onChange={setCongregation}
-                options={congregationOptions}
-                onChangeOptions={(opts) => updateCatalog("congregations", opts)}
-                canManageOptions={canManageCatalogs}
-              />
-            </div>
-
-            {memberDirectory.length > 0 && (
-              <div className="space-y-1 md:col-span-2">
-                <Label>Buscar no Rol da Secretaria (opcional)</Label>
-                <Select
-                  value={selectedMemberId || "__manual__"}
-                  onValueChange={handleMemberSelect}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Digitar nome manualmente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__manual__">Digitar nome manualmente</SelectItem>
-                    {memberDirectory.slice(0, 200).map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        #{m.matricula ?? "-"} — {m.name} ({m.role})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Igreja / Congregação *</Label>
+                <EditableSelect
+                  label="Igreja / Congregação"
+                  value={congregation}
+                  onChange={setCongregation}
+                  options={congregationOptions}
+                  onChangeOptions={(opts) => updateCatalog("congregations", opts)}
+                  canManageOptions={canManageCatalogs}
+                />
               </div>
-            )}
+
+              <div className="space-y-1">
+                <Label>Conta Corrente *</Label>
+                <EditableSelect
+                  label="Conta Corrente"
+                  value={bankAccount}
+                  onChange={setBankAccount}
+                  options={catalogs.bankAccounts}
+                  onChangeOptions={(opts) => updateCatalog("bankAccounts", opts)}
+                  canManageOptions={canManageCatalogs}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label>Departamento *</Label>
+                <EditableSelect
+                  label="Departamento"
+                  value={department}
+                  onChange={setDepartment}
+                  options={catalogs.departments}
+                  onChangeOptions={(opts) => updateCatalog("departments", opts)}
+                  canManageOptions={canManageCatalogs}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label>Tipo de Documento</Label>
+                <EditableSelect
+                  label="Tipo de Documento"
+                  value={documentType}
+                  onChange={setDocumentType}
+                  options={catalogs.documentTypes}
+                  onChangeOptions={(opts) => updateCatalog("documentTypes", opts)}
+                  canManageOptions={canManageCatalogs}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label>
+                  {type === "entrada" ? "Plano de Contas *" : "Categoria de Despesa *"}
+                </Label>
+                <EditableSelect
+                  label={type === "entrada" ? "Plano de Contas" : "Categoria de Despesa"}
+                  value={purpose}
+                  onChange={setPurpose}
+                  options={
+                    type === "entrada"
+                      ? catalogs.entryPurposes
+                      : catalogs.expenseCategories
+                  }
+                  onChangeOptions={(opts) =>
+                    updateCatalog(
+                      type === "entrada" ? "entryPurposes" : "expenseCategories",
+                      opts
+                    )
+                  }
+                  canManageOptions={canManageCatalogs}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label>Espécie (Forma de Pagamento) *</Label>
+                <EditableSelect
+                  label="Espécie"
+                  value={paymentMethod}
+                  onChange={setPaymentMethod}
+                  options={catalogs.paymentMethods}
+                  onChangeOptions={(opts) => updateCatalog("paymentMethods", opts)}
+                  canManageOptions={canManageCatalogs}
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
-            <div className="space-y-1 md:col-span-2">
-              <Label htmlFor="tr-contributor">
-                {type === "entrada"
-                  ? "Nome do Dizimista / Ofertante *"
-                  : "Favorecido / Descrição *"}
-              </Label>
-              <Input
-                id="tr-contributor"
-                placeholder={
-                  type === "entrada"
-                    ? "Nome completo (ou Oferta Anônima)"
-                    : "Ex.: Conta de energia / Fornecedor"
-                }
-                value={contributorName}
-                onChange={(e) => {
-                  setSelectedMemberId("");
-                  setContributorMatricula(undefined);
-                  setContributorName(e.target.value);
-                }}
-                required
-              />
+          {/* Bloco 2: Dados do Recebimento (Matrícula + Busca rápida + Valor + Ref) */}
+          <div className="rounded-lg border p-3.5 space-y-3 bg-card">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Dados do Recebimento
+              </span>
+              {selectedMemberOriginCong && selectedMemberOriginCong !== congregation && (
+                <button
+                  type="button"
+                  onClick={() => setCongregation(selectedMemberOriginCong)}
+                  className="text-[11px] text-amber-700 hover:underline"
+                  title="Clique para usar a congregação de origem cadastrada para este membro"
+                >
+                  Cadastro do membro: {selectedMemberOriginCong} (trocar?)
+                </button>
+              )}
             </div>
 
-            <div className="space-y-1 md:col-span-2">
-              <Label htmlFor="tr-notes">Observações do Recibo (opcional)</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 items-start">
+              <div className="space-y-1 md:col-span-3">
+                <Label htmlFor="tr-date">Data *</Label>
+                <Input
+                  id="tr-date"
+                  type="date"
+                  value={entryDate}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1 md:col-span-3">
+                <Label htmlFor="tr-ref-month">Ref (mm/aaaa) *</Label>
+                <Input
+                  id="tr-ref-month"
+                  type="month"
+                  value={referenceMonth}
+                  onChange={(e) => {
+                    setManualMonthEdited(true);
+                    setReferenceMonth(e.target.value);
+                  }}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {formatReferenceMonthLabel(referenceMonth)}
+                </p>
+              </div>
+
+              <div className="space-y-1 md:col-span-3">
+                <Label htmlFor="tr-amount">Valor (R$) *</Label>
+                <Input
+                  ref={amountInputRef}
+                  id="tr-amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  placeholder="0,00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1 md:col-span-3">
+                <Label>Nº Lançamento</Label>
+                <Input value={nextSeqLabel} readOnly className="font-mono bg-muted/40" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+              <div className="space-y-1 md:col-span-3">
+                <Label htmlFor="tr-matricula">Matrícula (Tab / Enter)</Label>
+                <div className="flex gap-1.5">
+                  <Input
+                    ref={matriculaInputRef}
+                    id="tr-matricula"
+                    placeholder="Ex: 3686"
+                    value={matriculaInput}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setMatriculaInput(val);
+                      const exact = findMemberByMatriculaInput(memberDirectory, val);
+                      if (exact) {
+                        applyFoundMember(exact);
+                      } else {
+                        setSelectedMemberId("");
+                        setContributorMatricula(undefined);
+                        setSelectedMemberOriginCong("");
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleMatriculaLookup(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (matriculaInput.trim() && !selectedMemberId) {
+                        handleMatriculaLookup(false);
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="shrink-0"
+                    title="Pesquisar membro no Rol da Secretaria"
+                    onClick={() => {
+                      setMemberPickerQuery("");
+                      setMemberPickerOpen(true);
+                    }}
+                  >
+                    <Search className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1 md:col-span-3">
+                <Label>Cargo / Condição</Label>
+                <EditableSelect
+                  label="Condição do Contribuinte"
+                  value={contributorRole}
+                  onChange={setContributorRole}
+                  options={catalogs.contributorRoles}
+                  onChangeOptions={(opts) => updateCatalog("contributorRoles", opts)}
+                  canManageOptions={canManageCatalogs}
+                />
+              </div>
+
+              <div className="space-y-1 md:col-span-6">
+                <Label htmlFor="tr-contributor">
+                  {type === "entrada"
+                    ? "Nome da Pessoa (Dizimista / Ofertante) *"
+                    : "Favorecido / Descrição *"}
+                </Label>
+                <Input
+                  id="tr-contributor"
+                  placeholder={
+                    type === "entrada"
+                      ? "Nome completo ou digite a matrícula ao lado"
+                      : "Ex.: Conta de energia / Fornecedor"
+                  }
+                  value={contributorName}
+                  onChange={(e) => {
+                    setSelectedMemberId("");
+                    setContributorMatricula(undefined);
+                    setSelectedMemberOriginCong("");
+                    setContributorName(e.target.value);
+                  }}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="tr-notes">Histórico / Observações</Label>
               <Input
                 id="tr-notes"
-                placeholder="Ex.: Culto da manhã / Referente a setembro..."
+                placeholder="Ex.: Culto da noite / Referente ao mês anterior..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="tr-amount">Valor (R$) *</Label>
-              <Input
-                id="tr-amount"
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder="0,00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
-              />
-            </div>
+            {/* Rodapé do Lançamento Simplificado: Mini Recibo + Anexo + Imprimir Recibo */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t">
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                  <Checkbox
+                    checked={printMiniReceipt}
+                    onCheckedChange={(v) => setPrintMiniReceipt(Boolean(v))}
+                  />
+                  <span>Mini Recibo</span>
+                </label>
 
-            <Button type="submit" className="w-full">
-              <Plus className="h-4 w-4 mr-1" />
-              {defaults.autoOpenReceiptOnSave ? "Salvar e Recibo" : "Lançar"}
-            </Button>
+                <Select
+                  value={paperWidthOverride}
+                  onValueChange={(v: "58mm" | "80mm") => setPaperWidthOverride(v)}
+                >
+                  <SelectTrigger className="h-8 w-24 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="80mm">80mm</SelectItem>
+                    <SelectItem value="58mm">58mm</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <input
+                  ref={pixAttachmentRef}
+                  type="file"
+                  accept=".pdf,.txt,image/*"
+                  onChange={handleAttachPixReceipt}
+                  className="hidden"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={extractingPix}
+                  onClick={() => pixAttachmentRef.current?.click()}
+                  title="Lê comprovante PIX (PDF ou print) direto no navegador sem salvar arquivo"
+                >
+                  {extractingPix ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Paperclip className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  {extractingPix ? "Lendo PIX..." : "Anexo / Ler PIX"}
+                </Button>
+
+                {attachedPix && (
+                  <Badge variant="outline" className="text-[11px] gap-1 pr-1">
+                    {attachedPix.fileName}
+                    <button
+                      type="button"
+                      onClick={() => setAttachedPix(null)}
+                      className="hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={resetPersonFieldsOnly}
+                  title="Limpar apenas dados da pessoa e valor"
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-1" /> Limpar
+                </Button>
+                <Button type="submit">
+                  {printMiniReceipt ? (
+                    <>
+                      <Printer className="h-4 w-4 mr-1.5" /> Imprimir Recibo
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4 mr-1.5" /> Salvar Lançamento
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           </div>
         </form>
       </CardContent>
@@ -1278,6 +1743,7 @@ export const ChurchTreasuryPreview = ({
             <TabsTrigger value="entradas">Entradas</TabsTrigger>
             <TabsTrigger value="saidas">Saídas</TabsTrigger>
             <TabsTrigger value="conferencia">Conferência ({entries.length})</TabsTrigger>
+            <TabsTrigger value="relatorios">Relatórios &amp; Caixa</TabsTrigger>
             {isAdmin && <TabsTrigger value="predefinicoes">Predefinições</TabsTrigger>}
           </TabsList>
         </div>
@@ -1351,6 +1817,156 @@ export const ChurchTreasuryPreview = ({
           {renderMovementsAndFilters()}
         </TabsContent>
 
+        <TabsContent value="relatorios" className="space-y-5">
+          <Card>
+            <CardHeader className="flex flex-wrap flex-row items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ClipboardList className="h-4 w-4 text-primary" /> Relatórios, Balancete Analítico &amp; Encerramento do Caixa
+                </CardTitle>
+                <CardDescription>
+                  Reflete automaticamente os filtros de período, conta, plano e operador selecionados ({filteredEntries.length} movimento(s)).
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setFilterStartDate(todayStr);
+                    setFilterEndDate(todayStr);
+                  }}
+                >
+                  Caixa de Hoje
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleExportCsv}
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" /> Exportar CSV
+                </Button>
+                <Button type="button" size="sm" onClick={handlePrintClosingReport}>
+                  <Printer className="h-3.5 w-3.5 mr-1.5" /> Imprimir Encerramento do Caixa
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-lg border p-3 bg-emerald-500/5">
+                <div className="text-xs text-muted-foreground">Total Entradas no Recorte</div>
+                <div className="text-2xl font-bold text-emerald-700">
+                  {brl(reportSummary.totalIncome)}
+                </div>
+              </div>
+              <div className="rounded-lg border p-3 bg-rose-500/5">
+                <div className="text-xs text-muted-foreground">Total Saídas no Recorte</div>
+                <div className="text-2xl font-bold text-rose-700">
+                  {brl(reportSummary.totalExpense)}
+                </div>
+              </div>
+              <div className="rounded-lg border p-3 bg-primary/5">
+                <div className="text-xs text-muted-foreground">Saldo Líquido (Encerramento)</div>
+                <div className="text-2xl font-bold text-primary">
+                  {brl(reportSummary.netBalance)}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Balancete Analítico (Plano de Contas)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Plano de Contas</TableHead>
+                      <TableHead className="text-right">Qtd</TableHead>
+                      <TableHead className="text-right">Entradas</TableHead>
+                      <TableHead className="text-right">Saídas</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reportSummary.byAccountPlan.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-xs text-muted-foreground py-6">
+                          Sem lançamentos para exibir.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      reportSummary.byAccountPlan.map((row) => (
+                        <TableRow key={row.label}>
+                          <TableCell className="text-xs font-medium">{row.label}</TableCell>
+                          <TableCell className="text-right text-xs font-mono">{row.count}</TableCell>
+                          <TableCell className="text-right text-xs text-emerald-700 font-semibold">
+                            {brl(row.income)}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-rose-600 font-semibold">
+                            {brl(row.expense)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Fechamento por Espécie &amp; Congregação</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Espécie (Meio)</TableHead>
+                      <TableHead className="text-right">Entradas</TableHead>
+                      <TableHead className="text-right">Saídas</TableHead>
+                      <TableHead className="text-right">Saldo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reportSummary.byPaymentMethod.map((row) => (
+                      <TableRow key={row.label}>
+                        <TableCell className="text-xs font-medium">{row.label}</TableCell>
+                        <TableCell className="text-right text-xs text-emerald-700">{brl(row.income)}</TableCell>
+                        <TableCell className="text-right text-xs text-rose-600">{brl(row.expense)}</TableCell>
+                        <TableCell className="text-right text-xs font-bold">{brl(row.net)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Congregação / Repasse</TableHead>
+                      <TableHead className="text-right">Entradas</TableHead>
+                      <TableHead className="text-right">Saídas</TableHead>
+                      <TableHead className="text-right">Saldo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reportSummary.byCongregation.map((row) => (
+                      <TableRow key={row.label}>
+                        <TableCell className="text-xs font-medium">{row.label}</TableCell>
+                        <TableCell className="text-right text-xs text-emerald-700">{brl(row.income)}</TableCell>
+                        <TableCell className="text-right text-xs text-rose-600">{brl(row.expense)}</TableCell>
+                        <TableCell className="text-right text-xs font-bold">{brl(row.net)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
         {isAdmin && (
           <TabsContent value="predefinicoes" className="space-y-5">
             <Card>
@@ -1414,7 +2030,7 @@ export const ChurchTreasuryPreview = ({
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label>Congregação padrão</Label>
+                      <Label>Congregação padrão (quando usuário não tem vínculo fixo)</Label>
                       <EditableSelect
                         label="Congregação"
                         value={defaultsDraft.defaultCongregation}
@@ -1423,6 +2039,30 @@ export const ChurchTreasuryPreview = ({
                         }
                         options={congregationOptions}
                         onChangeOptions={(opts) => updateCatalog("congregations", opts)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Departamento padrão</Label>
+                      <EditableSelect
+                        label="Departamento"
+                        value={defaultsDraft.defaultDepartment}
+                        onChange={(v) =>
+                          setDefaultsDraft({ ...defaultsDraft, defaultDepartment: v })
+                        }
+                        options={catalogs.departments}
+                        onChangeOptions={(opts) => updateCatalog("departments", opts)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Tipo de Documento padrão</Label>
+                      <EditableSelect
+                        label="Tipo de Documento"
+                        value={defaultsDraft.defaultDocumentType}
+                        onChange={(v) =>
+                          setDefaultsDraft({ ...defaultsDraft, defaultDocumentType: v })
+                        }
+                        options={catalogs.documentTypes}
+                        onChangeOptions={(opts) => updateCatalog("documentTypes", opts)}
                       />
                     </div>
                     <div className="space-y-1">
@@ -1587,8 +2227,62 @@ export const ChurchTreasuryPreview = ({
         onOpenChange={setReceiptOpen}
         entry={receiptEntry}
         churchHeader={defaults.churchHeader}
-        paperWidth={defaults.receiptPaperWidth}
+        paperWidth={paperWidthOverride}
       />
+
+      {/* Modal: Busca rápida de membro no Rol da Secretaria */}
+      <Dialog open={memberPickerOpen} onOpenChange={setMemberPickerOpen}>
+        <DialogContent className="max-w-xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Selecionar Membro / Contribuinte</DialogTitle>
+            <DialogDescription>
+              Pesquise por número de matrícula, nome, cargo ou congregação para preencher instantaneamente no Lançamento Simplificado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="relative">
+            <Search className="h-4 w-4 absolute left-2.5 top-2.5 text-muted-foreground" />
+            <Input
+              autoFocus
+              className="pl-8"
+              placeholder="Digite matrícula ou parte do nome..."
+              value={memberPickerQuery}
+              onChange={(e) => setMemberPickerQuery(e.target.value)}
+            />
+          </div>
+          <div className="overflow-y-auto space-y-1.5 max-h-80 pr-1">
+            {memberPickerResults.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-8 text-center">
+                {memberDirectory.length === 0
+                  ? "Nenhum membro cadastrado na Secretaria para este contrato."
+                  : "Nenhum membro encontrado com este termo."}
+              </p>
+            ) : (
+              memberPickerResults.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    applyFoundMember(m);
+                    setMemberPickerOpen(false);
+                    setTimeout(() => amountInputRef.current?.focus(), 40);
+                  }}
+                  className="w-full rounded-lg border px-3 py-2 text-left hover:border-primary hover:bg-primary/5 flex items-center justify-between gap-2 text-xs transition-colors"
+                >
+                  <div>
+                    <div className="font-semibold text-sm">{m.name}</div>
+                    <div className="text-muted-foreground">
+                      {m.role} • {m.congregation}
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="font-mono">
+                    #{m.matricula ?? "-"}
+                  </Badge>
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

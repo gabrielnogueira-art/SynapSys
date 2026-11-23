@@ -123,17 +123,24 @@ export const ClientShell = ({
 
   const userDisplay =
     session.mode === "client"
-      ? { name: session.userName, role: session.roleLabel, email: session.userEmail }
+      ? {
+          name: session.userName,
+          role: session.roleLabel,
+          email: session.userEmail,
+          congregation: session.assignedCongregation,
+        }
       : access.signedIn
       ? {
           name: access.userName || access.userEmail || "Usuário",
           role: access.roleLabel || "Acesso Autenticado",
           email: access.userEmail || "",
+          congregation: access.assignedCongregation ?? undefined,
         }
       : {
           name: contract.responsibleName || "Administrador",
           role: "Acesso Preview (Empreendedor)",
           email: contract.responsibleEmail || "admin@sistema.local",
+          congregation: undefined,
         };
 
   return (
@@ -391,18 +398,32 @@ export const ClientShell = ({
                   <div className="h-7 w-7 rounded-full bg-amber-400/20 border border-amber-400/50 flex items-center justify-center text-amber-300">
                     <User className="h-4 w-4" />
                   </div>
-                  <span className="hidden sm:inline text-xs max-w-[120px] truncate">
-                    {userDisplay.name}
-                  </span>
+                  <div className="hidden sm:flex flex-col items-start text-left max-w-[140px]">
+                    <span className="text-xs truncate w-full leading-tight">
+                      {userDisplay.name}
+                    </span>
+                    {userDisplay.congregation && (
+                      <span className="text-[10px] text-amber-300 truncate w-full leading-tight">
+                        {userDisplay.congregation}
+                      </span>
+                    )}
+                  </div>
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-64 space-y-3">
                 <div className="space-y-0.5">
                   <div className="text-sm font-semibold">{userDisplay.name}</div>
                   <div className="text-xs text-muted-foreground">{userDisplay.email}</div>
-                  <Badge variant="secondary" className="text-[10px] mt-1">
-                    {userDisplay.role}
-                  </Badge>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    <Badge variant="secondary" className="text-[10px]">
+                      {userDisplay.role}
+                    </Badge>
+                    {userDisplay.congregation && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {userDisplay.congregation}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="pt-2 border-t flex flex-col gap-1.5">
                   {overviewAllowed && (
