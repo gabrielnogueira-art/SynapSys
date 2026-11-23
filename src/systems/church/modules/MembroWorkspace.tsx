@@ -45,6 +45,7 @@ import type {
   DigitalTitheRecord,
   LabRoleMode,
   MembroPortalData,
+  MemberPortalProfile,
 } from "@/platform/labs/labsTypes";
 import {
   buildMemberAnnualTimeline,
@@ -466,6 +467,15 @@ export const MembroWorkspace = ({
       {/* =======================================================
           VISÃO 1: PORTAL DO MEMBRO (SELF-SERVICE)
           ======================================================= */}
+      {viewMode === "membro" && !activeMember && (
+        <AddMemberCard
+          canAdd={isAdmin}
+          onAdd={(m) =>
+            onChange({ ...data, members: [...data.members, m], activeMemberId: m.id })
+          }
+        />
+      )}
+
       {viewMode === "membro" && activeMember && (
         <div className="space-y-6">
           {/* A. Carteirinha Digital + Integração Secretaria & EBD */}
@@ -1233,3 +1243,92 @@ export const MembroWorkspace = ({
     </div>
   );
 };
+
+const EMPTY_MEMBER_FORM = {
+  matricula: "",
+  fullName: "",
+  ecclesiasticalRole: "Membro",
+  congregation: "",
+  birthDate: "",
+  phone: "",
+  email: "",
+  ebdClassName: "",
+};
+
+function AddMemberCard({
+  canAdd,
+  onAdd,
+}: {
+  canAdd: boolean;
+  onAdd: (m: MemberPortalProfile) => void;
+}) {
+  const [form, setForm] = useState(EMPTY_MEMBER_FORM);
+  if (!canAdd) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-sm text-muted-foreground">
+          Nenhum membro cadastrado no portal ainda. Peça ao administrador do contrato para cadastrar os membros.
+        </CardContent>
+      </Card>
+    );
+  }
+  const valid = form.matricula.trim() && form.fullName.trim();
+  const field = (key: keyof typeof EMPTY_MEMBER_FORM, label: string, type = "text") => (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <Input
+        type={type}
+        value={form[key]}
+        onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+      />
+    </div>
+  );
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Cadastrar membro</CardTitle>
+        <CardDescription>
+          Nenhum membro no portal ainda. Cadastre o primeiro para liberar a carteirinha e o envio de dízimos.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {field("matricula", "Matrícula *")}
+          {field("fullName", "Nome completo *")}
+          {field("ecclesiasticalRole", "Cargo")}
+          {field("congregation", "Congregação")}
+          {field("birthDate", "Nascimento", "date")}
+          {field("phone", "Telefone")}
+          {field("email", "E-mail", "email")}
+          {field("ebdClassName", "Classe da EBD")}
+        </div>
+        <Button
+          disabled={!valid}
+          onClick={() => {
+            onAdd({
+              id: `mem-${Date.now().toString(36)}`,
+              matricula: form.matricula.trim(),
+              fullName: form.fullName.trim(),
+              cpfMasked: "",
+              birthDate: form.birthDate,
+              baptismDate: "",
+              address: "",
+              phone: form.phone,
+              email: form.email,
+              ecclesiasticalRole: form.ecclesiasticalRole || "Membro",
+              congregation: form.congregation,
+              maritalStatus: "",
+              spouseName: "",
+              ebdClassName: form.ebdClassName,
+              ebdTeachers: "",
+              ebdAttendanceSummary: "",
+            } as MemberPortalProfile);
+            setForm(EMPTY_MEMBER_FORM);
+          }}
+        >
+          Adicionar membro
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
