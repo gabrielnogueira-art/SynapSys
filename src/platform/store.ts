@@ -309,7 +309,7 @@ export async function reloadPlatformStore() {
           });
         }
         if (!p.error) {
-          pendingRequests = (p.data ?? []).map((r) => ({
+          pendingRequests = ((p.data ?? []) as unknown as Array<Record<string, any>>).map((r) => ({
             id: r.id,
             userId: r.user_id ?? null,
             email: r.email,

@@ -131,7 +131,7 @@ export const SocialWorkspace = ({
     e.preventDefault();
     const qty = Math.max(1, Math.floor(Number(assembleQty) || 1));
     const res = assembleSocialBaskets(data, qty, assembleOperator, todayIsoDate());
-    if (!res.ok) {
+    if (res.ok === false) {
       const msg = res.shortages
         .map((s) => `${s.supplyName}: falta ${s.required - s.available} ${s.unit}`)
         .join(" • ");
@@ -181,7 +181,7 @@ export const SocialWorkspace = ({
       qty,
       isAdmin && delOverrideDup
     );
-    if (!check.ok) {
+    if (check.ok === false) {
       toast({
         variant: "destructive",
         title: "Entrega bloqueada",
@@ -553,13 +553,13 @@ export const SocialWorkspace = ({
                 </div>
               </div>
 
-              {deliveryValidationPreview && !deliveryValidationPreview.ok && (
+              {deliveryValidationPreview && deliveryValidationPreview.ok === false && (
                 <div className="rounded border border-destructive/40 bg-destructive/10 p-2.5 text-destructive space-y-2">
                   <div className="flex items-start gap-2 font-medium">
                     <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span>{deliveryValidationPreview.reason}</span>
+                    <span>{(deliveryValidationPreview as { reason?: string }).reason}</span>
                   </div>
-                  {isAdmin && deliveryValidationPreview.duplicateDelivery && (
+                  {isAdmin && (deliveryValidationPreview as { duplicateDelivery?: unknown }).duplicateDelivery && (
                     <label className="flex items-center gap-2 text-foreground cursor-pointer">
                       <Checkbox
                         checked={delOverrideDup}

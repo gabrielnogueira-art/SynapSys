@@ -592,9 +592,9 @@ export const ChurchLegacyShell = ({
   }, [enabledChurchModules, openOrFocusTab]);
 
   const activeSecSection: SecretariatSection =
-    (activeTabId && SEC_SECTION_BY_TAB[activeTabId]) ?? lastSecSection;
+    (activeTabId ? SEC_SECTION_BY_TAB[activeTabId] : undefined) ?? lastSecSection;
   const activeTreasurySection: TreasurySection =
-    (activeTabId && TR_SECTION_BY_TAB[activeTabId]) ?? lastTrSection;
+    (activeTabId ? TR_SECTION_BY_TAB[activeTabId] : undefined) ?? lastTrSection;
 
   const isSecVisible = Boolean(activeTabId?.startsWith("sec-"));
   const isTrVisible = Boolean(activeTabId?.startsWith("tr-"));

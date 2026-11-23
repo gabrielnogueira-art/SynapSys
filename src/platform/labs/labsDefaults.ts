@@ -10,6 +10,7 @@ import type {
   LabsSandboxState,
   LivrariaData,
   MembroPortalData,
+  LabModulePromotion,
   SocialData,
   SocialDelivery,
 } from "./labsTypes";
@@ -491,14 +492,14 @@ export function clearLabsTransactionsOnly(state: LabsSandboxState): LabsSandboxS
 export function normalizeLabPromotions(raw: unknown): LabPromotionsMap {
   if (!raw || typeof raw !== "object") return DEFAULT_LAB_PROMOTIONS;
   const src = raw as Record<string, unknown>;
-  const normalizeOne = (id: LabModuleId) => {
+  const normalizeOne = (id: LabModuleId): LabModulePromotion => {
     const def = DEFAULT_LAB_PROMOTIONS[id];
     const item = src[id];
     if (!item || typeof item !== "object") return def;
     const r = item as Record<string, unknown>;
     const stage =
-      r.stage === "em_aprovacao" || r.stage === "promovido" ? r.stage : "em_incubacao";
-    const model = r.commercialModel === "pacote_padrao" ? "pacote_padrao" : "addon";
+      (r.stage === "em_aprovacao" || r.stage === "promovido" ? r.stage : "em_incubacao") as LabModulePromotion["stage"];
+    const model: LabModulePromotion["commercialModel"] = r.commercialModel === "pacote_padrao" ? "pacote_padrao" : "addon";
     return {
       moduleId: id,
       stage,
