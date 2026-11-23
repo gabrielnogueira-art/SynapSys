@@ -1,3 +1,4 @@
+import type { LabModulePromotion } from "../types";
 import type { LabModuleId } from "../types";
 import type {
   CantinaData,
@@ -10,7 +11,6 @@ import type {
   LabsSandboxState,
   LivrariaData,
   MembroPortalData,
-  LabModulePromotion,
   SocialData,
   SocialDelivery,
 } from "./labsTypes";
