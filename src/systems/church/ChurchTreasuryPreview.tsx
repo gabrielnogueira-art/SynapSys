@@ -314,12 +314,18 @@ export const ChurchTreasuryPreview = ({
   activeSection = "dashboard",
   onChangeSection,
   moduleLevel = "admin",
+  embedded = false,
+  hideQuickForm = false,
+  hideListInLaunch = false,
 }: {
   contractId: string;
   clientName: string;
   activeSection?: TreasurySection;
   onChangeSection?: (s: TreasurySection) => void;
   moduleLevel?: string;
+  embedded?: boolean;
+  hideQuickForm?: boolean;
+  hideListInLaunch?: boolean;
 }) => {
   const { toast } = useToast();
   const access = useContractAccess(contractId);
@@ -362,6 +368,8 @@ export const ChurchTreasuryPreview = ({
   const [memberDirectory, setMemberDirectory] = useState<MemberLookup[]>([]);
   const [unitNames, setUnitNames] = useState<string[]>([]);
 
+  const [launchSubTab, setLaunchSubTab] = useState<"cadastro" | "configurar">("cadastro");
+
   useEffect(() => {
     let active = true;
     const loadSecretariatRefs = async () => {
@@ -393,8 +401,19 @@ export const ChurchTreasuryPreview = ({
       }
     };
     void loadSecretariatRefs();
+    const onModuleUpdated = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ contractId?: string; moduleKey?: string }>).detail;
+      if (
+        detail?.contractId === contractId &&
+        (detail.moduleKey === "church_members" || detail.moduleKey === "church_units")
+      ) {
+        void loadSecretariatRefs();
+      }
+    };
+    window.addEventListener("platform-module-updated", onModuleUpdated);
     return () => {
       active = false;
+      window.removeEventListener("platform-module-updated", onModuleUpdated);
     };
   }, [contractId]);
 
@@ -1722,31 +1741,33 @@ export const ChurchTreasuryPreview = ({
   if (error) return <p role="alert" className="p-6 text-destructive">{error}</p>;
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
+    <div className={embedded ? "p-3 sm:p-5 space-y-4" : "p-6 space-y-6 max-w-6xl mx-auto"}>
       <Tabs
         value={activeSection}
         onValueChange={(v) => onChangeSection?.(v as TreasurySection)}
         className="space-y-5"
       >
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <Landmark className="h-5 w-5 text-primary" /> Tesouraria Eclesiástica — {clientName}
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Lançamento simplificado, predefinições de dízimo, recibo para bobina estreita e conferência por responsável.
-            </p>
+        {!embedded && (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <Landmark className="h-5 w-5 text-primary" /> Tesouraria Eclesiástica — {clientName}
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Lançamento simplificado, predefinições de dízimo, recibo para bobina estreita e conferência por responsável.
+              </p>
+            </div>
+            <TabsList className="flex-wrap h-auto">
+              <TabsTrigger value="dashboard">Visão Geral</TabsTrigger>
+              {!isReadOnly && <TabsTrigger value="lancamento">Lançamento Simplificado</TabsTrigger>}
+              <TabsTrigger value="entradas">Entradas</TabsTrigger>
+              <TabsTrigger value="saidas">Saídas</TabsTrigger>
+              <TabsTrigger value="conferencia">Conferência ({entries.length})</TabsTrigger>
+              <TabsTrigger value="relatorios">Relatórios &amp; Caixa</TabsTrigger>
+              {isAdmin && <TabsTrigger value="predefinicoes">Predefinições</TabsTrigger>}
+            </TabsList>
           </div>
-          <TabsList className="flex-wrap h-auto">
-            <TabsTrigger value="dashboard">Visão Geral</TabsTrigger>
-            {!isReadOnly && <TabsTrigger value="lancamento">Lançamento Simplificado</TabsTrigger>}
-            <TabsTrigger value="entradas">Entradas</TabsTrigger>
-            <TabsTrigger value="saidas">Saídas</TabsTrigger>
-            <TabsTrigger value="conferencia">Conferência ({entries.length})</TabsTrigger>
-            <TabsTrigger value="relatorios">Relatórios &amp; Caixa</TabsTrigger>
-            {isAdmin && <TabsTrigger value="predefinicoes">Predefinições</TabsTrigger>}
-          </TabsList>
-        </div>
+        )}
 
         <TabsContent value="dashboard" className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1794,22 +1815,75 @@ export const ChurchTreasuryPreview = ({
             </Card>
           )}
 
-          {!isReadOnly && renderQuickForm()}
+          {!isReadOnly && !hideQuickForm && renderQuickForm()}
           {renderMovementsAndFilters()}
         </TabsContent>
 
-        <TabsContent value="lancamento" className="space-y-5">
-          {!isReadOnly && renderQuickForm()}
-          {renderMovementsAndFilters()}
+        <TabsContent value="lancamento" className="space-y-4">
+          {embedded && isAdmin && (
+            <div className="flex items-center gap-1 border-b border-slate-300">
+              <button
+                type="button"
+                onClick={() => setLaunchSubTab("cadastro")}
+                className={`px-3 py-1.5 text-xs font-medium rounded-t border border-b-0 ${
+                  launchSubTab === "cadastro"
+                    ? "bg-card text-foreground border-border"
+                    : "bg-muted/60 text-muted-foreground border-transparent hover:text-foreground"
+                }`}
+              >
+                Cadastro
+              </button>
+              <button
+                type="button"
+                onClick={() => setLaunchSubTab("configurar")}
+                className={`px-3 py-1.5 text-xs font-medium rounded-t border border-b-0 ${
+                  launchSubTab === "configurar"
+                    ? "bg-card text-foreground border-border"
+                    : "bg-muted/60 text-muted-foreground border-transparent hover:text-foreground"
+                }`}
+              >
+                Configurar
+              </button>
+            </div>
+          )}
+
+          {embedded && isAdmin && launchSubTab === "configurar" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Settings2 className="h-4 w-4 text-primary" /> Configurar Predefinições do Lançamento
+                </CardTitle>
+                <CardDescription>
+                  Os valores salvos aqui serão carregados automaticamente sempre que abrir o Lançamento Simplificado.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    onChangeSection?.("predefinicoes");
+                  }}
+                >
+                  Abrir tela completa de Predefinições
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {!isReadOnly && renderQuickForm()}
+              {!hideListInLaunch && renderMovementsAndFilters()}
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="entradas" className="space-y-5">
-          {!isReadOnly && renderQuickForm()}
+          {!isReadOnly && !hideQuickForm && renderQuickForm()}
           {renderMovementsAndFilters()}
         </TabsContent>
 
         <TabsContent value="saidas" className="space-y-5">
-          {!isReadOnly && renderQuickForm()}
+          {!isReadOnly && !hideQuickForm && renderQuickForm()}
           {renderMovementsAndFilters()}
         </TabsContent>
 

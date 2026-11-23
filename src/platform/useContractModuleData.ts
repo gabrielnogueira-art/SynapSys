@@ -56,6 +56,9 @@ export function useContractModuleData<T>(contractId: string, moduleKey: string, 
         revision.current = response.data.updated_at;
         valueRef.current = next;
         setValue(next);
+        window.dispatchEvent(
+          new CustomEvent("platform-module-updated", { detail: { contractId, moduleKey } })
+        );
         toast({ title: "Dados salvos" });
       } catch (failure) {
         toast({ variant: "destructive", title: "Alteração não salva", description: failure instanceof Error ? failure.message : "Tente novamente." });

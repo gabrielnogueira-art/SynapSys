@@ -56,6 +56,8 @@ interface ClientShellProps {
   showOverview?: boolean;
   customInstitutionTitle?: string;
   customLeaderSubtitle?: string;
+  layoutMode?: "moderno" | "legado";
+  onChangeLayoutMode?: (mode: "moderno" | "legado") => void;
   children: ReactNode;
 }
 
@@ -83,6 +85,8 @@ export const ClientShell = ({
   showOverview,
   customInstitutionTitle,
   customLeaderSubtitle,
+  layoutMode,
+  onChangeLayoutMode,
   children,
 }: ClientShellProps) => {
   const navigate = useNavigate();
@@ -272,8 +276,39 @@ export const ClientShell = ({
             </div>
           </div>
 
-          {/* Right actions: Back to overview + Bell + 9-dots Area Switcher + User */}
+          {/* Right actions: Layout Mode toggle + Back to overview + Bell + 9-dots + User */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {contract.segment === "igreja" && layoutMode && onChangeLayoutMode && (
+              <div
+                className="inline-flex items-center rounded-md bg-black/25 p-0.5 border border-white/15 text-[11px]"
+                role="group"
+                aria-label="Alternar modo de layout"
+              >
+                <button
+                  type="button"
+                  onClick={() => onChangeLayoutMode("moderno")}
+                  className={`px-2 py-1 rounded transition-colors ${
+                    layoutMode === "moderno"
+                      ? "bg-amber-400 text-slate-950 font-semibold shadow-sm"
+                      : "text-slate-200 hover:text-white"
+                  }`}
+                >
+                  <span className="hidden sm:inline">Modo </span>Moderno
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangeLayoutMode("legado")}
+                  className={`px-2 py-1 rounded transition-colors ${
+                    layoutMode === "legado"
+                      ? "bg-amber-400 text-slate-950 font-semibold shadow-sm"
+                      : "text-slate-200 hover:text-white"
+                  }`}
+                >
+                  <span className="hidden sm:inline">Modo </span>Legado
+                </button>
+              </div>
+            )}
+
             {overviewAllowed && activeArea !== "painel_geral" && (
               <Button
                 type="button"

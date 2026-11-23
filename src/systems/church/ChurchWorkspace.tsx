@@ -28,6 +28,7 @@ import { EbdPortal } from "@/systems/ebd/EbdPortal";
 import { ChurchTreasuryPreview, TreasurySection } from "@/systems/church/ChurchTreasuryPreview";
 import { ChurchSecretariatPreview, SecretariatSection } from "@/systems/church/ChurchSecretariatPreview";
 import { ChurchOverviewPanel } from "@/systems/church/ChurchOverviewPanel";
+import { ChurchLegacyShell } from "@/systems/church/ChurchLegacyShell";
 import {
   ChurchCantinaContractView,
   ChurchLivrariaContractView,
@@ -99,6 +100,23 @@ export const ChurchWorkspace = ({ contract, overrides, initialArea }: ChurchWork
   const [activeArea, setActiveArea] = useState<AreaKey>(defaultArea);
   const [secSection, setSecSection] = useState<SecretariatSection>("dashboard");
   const [treasurySection, setTreasurySection] = useState<TreasurySection>("dashboard");
+  const [layoutMode, setLayoutMode] = useState<"moderno" | "legado">(() => {
+    try {
+      const saved = localStorage.getItem("synapsys_church_layout_mode_v1");
+      return saved === "legado" ? "legado" : "moderno";
+    } catch {
+      return "moderno";
+    }
+  });
+
+  const handleChangeLayoutMode = (nextMode: "moderno" | "legado") => {
+    setLayoutMode(nextMode);
+    try {
+      localStorage.setItem("synapsys_church_layout_mode_v1", nextMode);
+    } catch {
+      // ignore storage errors
+    }
+  };
 
   useEffect(() => {
     if (initialArea && enabledChurchModules.includes(initialArea as ChurchModuleId)) {
@@ -392,72 +410,85 @@ export const ChurchWorkspace = ({ contract, overrides, initialArea }: ChurchWork
         onSelectModule={(m) => setActiveArea(m as ChurchModuleId)}
       />
 
-      <ClientShell
-        contract={contract}
-        activeArea={effectiveArea}
-        onSelectArea={setActiveArea}
-        sidebarItems={sidebarItems}
-        visibleModules={enabledChurchModules}
-        showOverview={showOverview}
-        customInstitutionTitle={overrides?.customBrandTitle}
-      >
-        {effectiveArea === "painel_geral" && showOverview && (
-          <ChurchOverviewPanel
-            contract={contract}
-            enabledModules={enabledChurchModules}
-            onOpenArea={(area) => setActiveArea(area)}
-          />
-        )}
-        {effectiveArea === "igreja_ebd" && (
-          <EbdPortal
-            contract={contract}
-            overrides={overrides}
-            basePath={contract.entryPath}
-          />
-        )}
-        {effectiveArea === "igreja_tesouraria" && (
-          <ChurchTreasuryPreview
-            contractId={contract.id}
-            clientName={contract.clientName}
-            activeSection={treasurySection}
-            onChangeSection={setTreasurySection}
-            moduleLevel={treasuryLevel}
-          />
-        )}
-        {effectiveArea === "igreja_secretaria" && (
-          <ChurchSecretariatPreview
-            contractId={contract.id}
-            clientName={contract.clientName}
-            activeSection={secSection}
-            onChangeSection={setSecSection}
-            moduleLevel={secretariatLevel}
-          />
-        )}
-        {effectiveArea === "igreja_cantina" && (
-          <ChurchCantinaContractView
-            contractId={contract.id}
-            moduleLevel={effectiveLevels?.igreja_cantina}
-          />
-        )}
-        {effectiveArea === "igreja_livraria" && (
-          <ChurchLivrariaContractView
-            contractId={contract.id}
-            moduleLevel={effectiveLevels?.igreja_livraria}
-          />
-        )}
-        {effectiveArea === "igreja_social" && (
-          <ChurchSocialContractView
-            contractId={contract.id}
-            moduleLevel={effectiveLevels?.igreja_social}
-          />
-        )}
-        {effectiveArea === "igreja_membro" && (
-          <ChurchMembroContractView
-            contractId={contract.id}
-            moduleLevel={effectiveLevels?.igreja_membro}
-          />
-        )}
-      </ClientShell>
+      {layoutMode === "legado" ? (
+        <ChurchLegacyShell
+          contract={contract}
+          overrides={overrides}
+          enabledChurchModules={enabledChurchModules}
+          effectiveLevels={effectiveLevels}
+          layoutMode={layoutMode}
+          onChangeLayoutMode={handleChangeLayoutMode}
+        />
+      ) : (
+        <ClientShell
+          contract={contract}
+          activeArea={effectiveArea}
+          onSelectArea={setActiveArea}
+          sidebarItems={sidebarItems}
+          visibleModules={enabledChurchModules}
+          showOverview={showOverview}
+          customInstitutionTitle={overrides?.customBrandTitle}
+          layoutMode={layoutMode}
+          onChangeLayoutMode={handleChangeLayoutMode}
+        >
+          {effectiveArea === "painel_geral" && showOverview && (
+            <ChurchOverviewPanel
+              contract={contract}
+              enabledModules={enabledChurchModules}
+              onOpenArea={(area) => setActiveArea(area)}
+            />
+          )}
+          {effectiveArea === "igreja_ebd" && (
+            <EbdPortal
+              contract={contract}
+              overrides={overrides}
+              basePath={contract.entryPath}
+            />
+          )}
+          {effectiveArea === "igreja_tesouraria" && (
+            <ChurchTreasuryPreview
+              contractId={contract.id}
+              clientName={contract.clientName}
+              activeSection={treasurySection}
+              onChangeSection={setTreasurySection}
+              moduleLevel={treasuryLevel}
+            />
+          )}
+          {effectiveArea === "igreja_secretaria" && (
+            <ChurchSecretariatPreview
+              contractId={contract.id}
+              clientName={contract.clientName}
+              activeSection={secSection}
+              onChangeSection={setSecSection}
+              moduleLevel={secretariatLevel}
+            />
+          )}
+          {effectiveArea === "igreja_cantina" && (
+            <ChurchCantinaContractView
+              contractId={contract.id}
+              moduleLevel={effectiveLevels?.igreja_cantina}
+            />
+          )}
+          {effectiveArea === "igreja_livraria" && (
+            <ChurchLivrariaContractView
+              contractId={contract.id}
+              moduleLevel={effectiveLevels?.igreja_livraria}
+            />
+          )}
+          {effectiveArea === "igreja_social" && (
+            <ChurchSocialContractView
+              contractId={contract.id}
+              moduleLevel={effectiveLevels?.igreja_social}
+            />
+          )}
+          {effectiveArea === "igreja_membro" && (
+            <ChurchMembroContractView
+              contractId={contract.id}
+              moduleLevel={effectiveLevels?.igreja_membro}
+            />
+          )}
+        </ClientShell>
+      )}
     </div>
   );
 };

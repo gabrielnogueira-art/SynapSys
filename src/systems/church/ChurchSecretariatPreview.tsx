@@ -245,12 +245,14 @@ export const ChurchSecretariatPreview = ({
   activeSection = "dashboard",
   onChangeSection,
   moduleLevel = "admin",
+  embedded = false,
 }: {
   contractId: string;
   clientName: string;
   activeSection?: SecretariatSection;
   onChangeSection?: (s: SecretariatSection) => void;
   moduleLevel?: string;
+  embedded?: boolean;
 }) => {
   const { toast } = useToast();
   const access = useContractAccess(contractId);
@@ -690,29 +692,31 @@ export const ChurchSecretariatPreview = ({
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
+    <div className={embedded ? "p-3 sm:p-5 space-y-4" : "p-6 space-y-6 max-w-6xl mx-auto"}>
       <Tabs
         value={activeSection}
         onValueChange={(v) => onChangeSection?.(v as SecretariatSection)}
         className="space-y-5"
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <BookOpenCheck className="h-5 w-5 text-primary" /> Secretaria — {clientName}
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              Matrícula permanente sequencial, ficha completa de membros e listas configuráveis no banco.
-            </p>
+        {!embedded && (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <BookOpenCheck className="h-5 w-5 text-primary" /> Secretaria — {clientName}
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Matrícula permanente sequencial, ficha completa de membros e listas configuráveis no banco.
+              </p>
+            </div>
+            <TabsList>
+              <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+              <TabsTrigger value="pessoas">Pessoas ({members.length})</TabsTrigger>
+              <TabsTrigger value="igrejas">Igrejas ({units.length})</TabsTrigger>
+              <TabsTrigger value="documentos">Documentos</TabsTrigger>
+              <TabsTrigger value="agenda">Agenda ({data.events.length})</TabsTrigger>
+            </TabsList>
           </div>
-          <TabsList>
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="pessoas">Pessoas ({members.length})</TabsTrigger>
-            <TabsTrigger value="igrejas">Igrejas ({units.length})</TabsTrigger>
-            <TabsTrigger value="documentos">Documentos</TabsTrigger>
-            <TabsTrigger value="agenda">Agenda ({data.events.length})</TabsTrigger>
-          </TabsList>
-        </div>
+        )}
 
         <TabsContent value="dashboard" className="space-y-5">
           {/* 4 KPI Cards espelhados no Membros Web */}
