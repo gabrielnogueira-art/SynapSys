@@ -580,7 +580,11 @@ export function buildTreasuryClosingReportHtml(params: {
 
 export function buildTreasuryCsv(entries: TreasuryEntryLike[]): string {
   const escCsv = (val: unknown) => {
-    const s = String(val ?? "");
+    let s = String(val ?? "");
+    // Neutraliza fórmulas de planilha (CSV injection), preservando números.
+    if (typeof val !== "number" && /^[=+\-@\t\r]/.test(s) && !/^-?\d+([.,]\d+)?$/.test(s)) {
+      s = `'${s}`;
+    }
     return `"${s.replace(/"/g, '""')}"`;
   };
   const header = [

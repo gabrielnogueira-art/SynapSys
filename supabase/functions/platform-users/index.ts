@@ -170,6 +170,7 @@ Deno.serve(async (req) => {
         : undefined;
       const effectiveModules = filteredModules ?? activeContractModules;
       const grantEbdAdmin = Boolean(
+        isMaster &&
         contract.ministry_id &&
           effectiveModules.includes("igreja_ebd") &&
           body.accessLevel !== "professor" &&
@@ -294,6 +295,7 @@ Deno.serve(async (req) => {
       }
       const effectiveModules = filteredModules ?? activeContractModules;
       const grantEbdAdmin = Boolean(
+        isMaster &&
         contract.ministry_id &&
           effectiveModules.includes("igreja_ebd") &&
           body.accessLevel !== "professor" &&
@@ -395,7 +397,7 @@ Deno.serve(async (req) => {
         nextData.assignedCongregation = body.assignedCongregation;
       }
 
-      const grantEbdAdmin = Boolean(
+      const grantEbdAdmin = !isMaster ? Boolean(target.data?.ebdAdmin) : Boolean(
         contract.ministry_id &&
           effectiveModules.includes("igreja_ebd") &&
           nextLevel !== "professor" &&
@@ -411,7 +413,7 @@ Deno.serve(async (req) => {
         .eq("id", target.id);
       if (upErr) throw upErr;
 
-      if (contract.ministry_id && typeof body.ebdAdmin === "boolean") {
+      if (isMaster && contract.ministry_id && typeof body.ebdAdmin === "boolean") {
         if (grantEbdAdmin) {
           const { data: existingRole } = await admin
             .from("user_roles")
@@ -448,6 +450,14 @@ Deno.serve(async (req) => {
 
     const { error } = await admin.from("platform_memberships").delete().eq("id", target.id);
     if (error) throw error;
+    if (contract.ministry_id) {
+      await admin
+        .from("user_roles")
+        .delete()
+        .eq("user_id", target.user_id)
+        .eq("role", "igreja_mae")
+        .eq("ministry_id", contract.ministry_id);
+    }
     return json({ ok: true });
   } catch (e) {
     console.error("platform-users", e);
